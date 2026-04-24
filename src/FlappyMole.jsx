@@ -241,6 +241,7 @@ export default function FlappyMole() {
       bounceVx: 0,
       bounceVy: 0,
       moleXOffset: 0,
+      collision: null, // { worldX, worldY, pipeScreenX, pipeGapTop, pipeGapBot, hitTop }
     }
     setDepth(0)
 
@@ -324,8 +325,16 @@ export default function FlappyMole() {
           s.dead = true
           s.flash = 14
           s.bounceFrames = BOUNCE_FRAMES
-          s.bounceVx = -6
+          s.bounceVx = -2
           s.bounceVy = hitTop ? 5 : -5
+          s.collision = {
+            worldX: moleCx,
+            worldY: moleCy,
+            pipeWorldX: p.worldX,
+            gapTop,
+            gapBot,
+            hitTop,
+          }
           fnRef.current.playCrash?.()
           break
         }
@@ -472,6 +481,29 @@ export default function FlappyMole() {
       ctx.beginPath()
       ctx.arc(MOLE_SCREEN_X + (s.moleXOffset || 0), s.moleY, HITBOX_R, 0, Math.PI * 2)
       ctx.stroke()
+      // Collision point + impacted pipe rect at the moment of hit (red)
+      if (s.collision) {
+        const c = s.collision
+        const colScreenX = c.worldX - s.distance + MOLE_SCREEN_X
+        const pipeScreenX = c.pipeWorldX - s.distance + MOLE_SCREEN_X
+        ctx.strokeStyle = '#ff3040'
+        ctx.lineWidth = 2
+        // The pipe rect that was impacted
+        if (c.hitTop) {
+          ctx.strokeRect(pipeScreenX, 0, PIPE_W, c.gapTop)
+        } else {
+          ctx.strokeRect(pipeScreenX, c.gapBot, PIPE_W, BOARD_H - c.gapBot)
+        }
+        // The mole hitbox circle at collision moment
+        ctx.beginPath()
+        ctx.arc(colScreenX, c.worldY, HITBOX_R, 0, Math.PI * 2)
+        ctx.stroke()
+        // Crosshair at exact hit center
+        ctx.beginPath()
+        ctx.moveTo(colScreenX - 8, c.worldY); ctx.lineTo(colScreenX + 8, c.worldY)
+        ctx.moveTo(colScreenX, c.worldY - 8); ctx.lineTo(colScreenX, c.worldY + 8)
+        ctx.stroke()
+      }
       ctx.restore()
     }
   }
