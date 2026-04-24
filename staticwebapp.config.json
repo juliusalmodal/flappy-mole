@@ -1,0 +1,25 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/api/*", "/assets/*", "*.{css,js,png,jpg,jpeg,gif,svg,ico,webp,woff,woff2,ttf,map,json,txt}"]
+  },
+  "routes": [
+    {
+      "route": "/index.html",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    }
+  ],
+  "globalHeaders": {
+    "Content-Security-Policy": "frame-ancestors 'self' https://jeules.net https://www.jeules.net",
+    "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    "X-Content-Type-Options": "nosniff",
+    "X-XSS-Protection": "1; mode=block",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+  },
+  "mimeTypes": {
+    ".json": "application/json"
+  }
+}

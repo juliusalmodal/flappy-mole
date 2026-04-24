@@ -1,0 +1,10 @@
+{
+  "name": "flappy-mole-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@azure/functions": "^4.5.0",
+    "@azure/data-tables": "^13.3.0",
+    "google-auth-library": "^9.14.1"
+  }
+}

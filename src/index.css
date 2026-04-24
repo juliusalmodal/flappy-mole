@@ -1,0 +1,24 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0E0D0B;
+  --surface: #161513;
+  --ink: #EDECE7;
+  --ink-soft: #78776F;
+  --accent: #C97A4A;
+  --rule: #272421;
+  --font-display: 'Cormorant', Georgia, serif;
+  --font-ui: 'Syne', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
