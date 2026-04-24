@@ -7,22 +7,27 @@ const BOARD_H = 640
 const MOLE_SIZE = 32
 const MOLE_SCREEN_Y = 180
 
-const BUOYANCY = -0.28
+const BUOYANCY = -0.22
 const DIG_FORCE = 0.95
 const VY_MAX = 11
-const VY_MIN = -3.6
+const VY_MIN = -3.2
 
-const STEER_ACCEL = 0.65
-const STEER_MAX = 6
+const STEER_ACCEL = 0.55
+const STEER_MAX = 5.5
 const STEER_DECAY = 0.88
 
 const WALL_H = 22
-const OBSTACLE_SPACING = 190
-const FIRST_OBSTACLE_Y = 340
-const GAP_W_START = 150
+const OBSTACLE_SPACING = 220
+const FIRST_OBSTACLE_Y = 520
+const GAP_W_START = 160
 const GAP_W_MIN = 74
 
 const PX_PER_METER = 10
+
+// Ramps from 0.45 at surface to 1.0 at ~1800 world px, so early dig is slow.
+function intensity(worldY) {
+  return Math.min(1.0, 0.45 + (worldY / 1800) * 0.55)
+}
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
 
@@ -221,10 +226,11 @@ export default function FlappyMole() {
       const s = stateRef.current
       const i = inputRef.current
 
-      // Vertical physics
+      // Vertical physics — intensity ramps up with depth so early dig feels controllable
+      const I = intensity(s.worldY)
       s.vy += BUOYANCY
-      if (i.digging) s.vy += DIG_FORCE
-      s.vy = clamp(s.vy, VY_MIN, VY_MAX)
+      if (i.digging) s.vy += DIG_FORCE * I
+      s.vy = clamp(s.vy, VY_MIN, VY_MAX * I)
       s.worldY = Math.max(0, s.worldY + s.vy)
 
       // Horizontal
