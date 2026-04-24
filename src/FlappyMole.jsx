@@ -15,10 +15,11 @@ const VY_ACCEL = 0.42
 const VY_DECAY = 0.80
 
 const PIPE_W = 64
-const PIPE_SPACING = 280
-const FIRST_PIPE_X = 700
-const GAP_H_START = 200
-const GAP_H_MIN = 120
+const PIPE_SPACING_START = 360
+const PIPE_SPACING_MIN = 260
+const FIRST_PIPE_X = 900
+const GAP_H_START = 280
+const GAP_H_MIN = 150
 const GAP_MARGIN = 60
 
 const PX_PER_METER = 10
@@ -28,8 +29,12 @@ function scrollSpeed(distance) {
   return SCROLL_SPEED_START + (SCROLL_SPEED_MAX - SCROLL_SPEED_START) * t
 }
 function gapHeight(distance) {
-  const t = Math.min(1, distance / 4500)
+  const t = Math.min(1, Math.max(0, (distance - 1500) / 7000))
   return GAP_H_START - (GAP_H_START - GAP_H_MIN) * t
+}
+function pipeSpacing(distance) {
+  const t = Math.min(1, Math.max(0, (distance - 1000) / 6000))
+  return PIPE_SPACING_START - (PIPE_SPACING_START - PIPE_SPACING_MIN) * t
 }
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
@@ -245,24 +250,19 @@ export default function FlappyMole() {
       else if (i.down && !i.up) s.vy += VY_ACCEL
       else                      s.vy *= VY_DECAY
       s.vy = clamp(s.vy, -VY_MAX, VY_MAX)
-      s.moleY += s.vy
-
-      // Hitting ceiling or floor = game over
-      if (s.moleY - MOLE_SIZE / 2 <= 0 || s.moleY + MOLE_SIZE / 2 >= BOARD_H) {
-        s.moleY = clamp(s.moleY, MOLE_SIZE / 2, BOARD_H - MOLE_SIZE / 2)
-        s.dead = true
-        s.flash = 8
-        fnRef.current.playCrash?.()
-      }
+      s.moleY = clamp(s.moleY + s.vy, MOLE_SIZE / 2, BOARD_H - MOLE_SIZE / 2)
+      // Kill velocity when pressing against bounds
+      if (s.moleY <= MOLE_SIZE / 2 && s.vy < 0) s.vy = 0
+      if (s.moleY >= BOARD_H - MOLE_SIZE / 2 && s.vy > 0) s.vy = 0
 
       // Spawn new pipe pair when the frontier isn't far enough ahead
-      while (s.nextPipeX - s.distance < BOARD_W + PIPE_SPACING) {
+      while (s.nextPipeX - s.distance < BOARD_W + PIPE_SPACING_START) {
         const gH = gapHeight(s.distance)
         const gapMin = GAP_MARGIN + gH / 2
         const gapMax = BOARD_H - GAP_MARGIN - gH / 2
         const gapY = gapMin + Math.random() * (gapMax - gapMin)
         s.pipes.push({ id: s.nextPipeId++, worldX: s.nextPipeX, gapY, gapH: gH, passed: false })
-        s.nextPipeX += PIPE_SPACING
+        s.nextPipeX += pipeSpacing(s.distance)
       }
 
       // Cull pipes that scrolled off screen left
