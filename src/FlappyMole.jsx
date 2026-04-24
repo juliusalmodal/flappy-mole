@@ -44,49 +44,54 @@ function pipeSpacing(distance) {
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
 
 // === Obstacle drawing helpers ===
-function drawBoulders(ctx, x, gapTop, gapBot, rnd, biome) {
-  // Round boulder piles — circles overlapping, with dirt backing so rect is fully covered
-  const drawPile = (yStart, yEnd, seedOffset) => {
-    // Dirt backing
+function drawBlocks(ctx, x, gapTop, gapBot, rnd, biome) {
+  // Mined ore-block stacks — dense grid covering the full collision rect
+  const drawStack = (yStart, yEnd, seedOffset) => {
+    // Dirt backing under the blocks so no empty gaps
     const bg = ctx.createLinearGradient(x, yStart, x, yEnd)
     bg.addColorStop(0, '#2a1810')
     bg.addColorStop(1, '#1a0e05')
     ctx.fillStyle = bg
     ctx.fillRect(x - 2, yStart, PIPE_W + 4, yEnd - yStart)
 
-    const rows = 4
-    const h = yEnd - yStart
-    for (let r = 0; r < rows; r++) {
-      const rowY = yStart + (h / rows) * r + (h / rows) / 2
-      const cols = 2
+    const blockSize = 28
+    const cols = 2
+    let i = seedOffset
+    for (let by = yStart; by < yEnd; by += blockSize - 2) {
       for (let c = 0; c < cols; c++) {
-        const i = r * cols + c + seedOffset
-        const cx = x + (c === 0 ? 0.25 : 0.75) * PIPE_W + (rnd(i) - 0.5) * 14
-        const cy = rowY + (rnd(i + 1) - 0.5) * 14
-        const radius = 18 + rnd(i + 2) * 12
+        const bx = x + c * (PIPE_W / cols) + (rnd(i + 1) - 0.5) * 3
+        const jitterY = (rnd(i + 2) - 0.5) * 2
+        const size = blockSize - rnd(i + 3) * 2
+        const left = bx
+        const top = by + jitterY
+
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.55)'
-        ctx.beginPath()
-        ctx.arc(cx + 3, cy + 3, radius, 0, Math.PI * 2)
-        ctx.fill()
-        // Main boulder body
-        ctx.fillStyle = '#5a3a1f'
-        ctx.beginPath()
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2)
-        ctx.fill()
-        // Top-left highlight
-        ctx.fillStyle = 'rgba(201,122,74,0.4)'
-        ctx.beginPath()
-        ctx.arc(cx - radius * 0.35, cy - radius * 0.35, radius * 0.45, 0, Math.PI * 2)
-        ctx.fill()
-        // Small dark speck for texture
-        ctx.fillStyle = 'rgba(0,0,0,0.4)'
-        ctx.fillRect(cx + radius * 0.1, cy - radius * 0.1, 2, 2)
+        ctx.fillRect(left + 2, top + 2, size, size)
+        // Block face (color varies a bit per block for an ore-y look)
+        ctx.fillStyle = rnd(i + 4) > 0.7 ? '#7e5530' : '#6b4529'
+        ctx.fillRect(left, top, size, size)
+        // Inner bevel light (top + left)
+        ctx.fillStyle = 'rgba(230,180,140,0.45)'
+        ctx.fillRect(left, top, size, 3)
+        ctx.fillRect(left, top, 3, size)
+        // Inner bevel dark (bottom + right)
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'
+        ctx.fillRect(left, top + size - 3, size, 3)
+        ctx.fillRect(left + size - 3, top, 3, size)
+        // Ore fleck (not on every block)
+        if (rnd(i + 5) > 0.4) {
+          ctx.fillStyle = 'rgba(201,122,74,0.55)'
+          ctx.fillRect(left + size * 0.4, top + size * 0.4, 3, 3)
+        }
+
+        i++
       }
+      i += 7
     }
   }
-  drawPile(-8, gapTop + 4, 0)
-  drawPile(gapBot - 4, BOARD_H + 8, 100)
+  drawStack(-4, gapTop + 2, 0)
+  drawStack(gapBot - 2, BOARD_H + 4, 1000)
 }
 
 function decodeJwt(token) {
@@ -477,7 +482,7 @@ export default function FlappyMole() {
         return x - Math.floor(x)
       }
 
-      drawBoulders(ctx, screenX, gapTop, gapBot, rnd, b)
+      drawBlocks(ctx, screenX, gapTop, gapBot, rnd, b)
     }
 
     // Mole sprite — swap images based on current input (up / down / idle-right)
