@@ -554,11 +554,11 @@ export default function FlappyMole() {
     const bandH = 12
     const rockGradTop = ctx.createLinearGradient(0, 0, 0, bandH)
     rockGradTop.addColorStop(0, '#1b0f06')
-    rockGradTop.addColorStop(1, b.top)
+    rockGradTop.addColorStop(1, b.soil)
     ctx.fillStyle = rockGradTop
     ctx.fillRect(0, 0, BOARD_W, bandH)
     const rockGradBot = ctx.createLinearGradient(0, BOARD_H - bandH, 0, BOARD_H)
-    rockGradBot.addColorStop(0, b.top)
+    rockGradBot.addColorStop(0, b.soil)
     rockGradBot.addColorStop(1, '#1b0f06')
     ctx.fillStyle = rockGradBot
     ctx.fillRect(0, BOARD_H - bandH, BOARD_W, bandH)
