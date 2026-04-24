@@ -291,7 +291,7 @@ export default function FlappyMole() {
       }
 
       // Cull pipes that scrolled off screen left
-      s.pipes = s.pipes.filter(p => (p.worldX - s.distance + MOLE_SCREEN_X) > -PIPE_W - 10)
+      s.pipes = s.pipes.filter(p => (p.worldX - s.distance) > -PIPE_W - 10)
 
       // Collision (circle vs pipe rectangles) + pass-detection
       const moleCx = s.distance + MOLE_SCREEN_X
@@ -401,7 +401,7 @@ export default function FlappyMole() {
 
     // Pipes (top + bottom columns with a gap)
     for (const p of s.pipes) {
-      const screenX = p.worldX - s.distance + MOLE_SCREEN_X
+      const screenX = p.worldX - s.distance
       if (screenX < -PIPE_W || screenX > BOARD_W) continue
       const gapTop = p.gapY - p.gapH / 2
       const gapBot = p.gapY + p.gapH / 2
@@ -471,7 +471,7 @@ export default function FlappyMole() {
       // Pipe hit rectangles (top + bottom) in lime
       ctx.strokeStyle = '#00ff88'
       for (const p of s.pipes) {
-        const screenX = p.worldX - s.distance + MOLE_SCREEN_X
+        const screenX = p.worldX - s.distance
         if (screenX < -PIPE_W || screenX > BOARD_W) continue
         const gapTop = p.gapY - p.gapH / 2
         const gapBot = p.gapY + p.gapH / 2
@@ -497,8 +497,8 @@ export default function FlappyMole() {
       // Collision moment: frozen mole + impacted pipe (red) + filled overlap to prove contact
       if (s.collision) {
         const c = s.collision
-        const colScreenX = c.worldX - s.distance + MOLE_SCREEN_X
-        const pipeScreenX = c.pipeWorldX - s.distance + MOLE_SCREEN_X
+        const colScreenX = c.worldX - s.distance
+        const pipeScreenX = c.pipeWorldX - s.distance
 
         // Impacted pipe rect (red, thick)
         ctx.strokeStyle = '#ff3040'
@@ -596,7 +596,7 @@ export default function FlappyMole() {
 
   fnRef.current.triggerGameOver = () => {
     cancelAnimationFrame(rafRef.current)
-    const finalDepth = Math.floor((stateRef.current?.worldY ?? 0) / PX_PER_METER)
+    const finalDepth = Math.floor((stateRef.current?.distance ?? 0) / PX_PER_METER)
     setPhase('gameover')
 
     if (userRef.current) {
