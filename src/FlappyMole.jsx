@@ -5,8 +5,7 @@ import './FlappyMole.css'
 const BOARD_W = 900
 const BOARD_H = 540
 const MOLE_SIZE = 30
-const HITBOX_W = 32
-const HITBOX_H = 28
+const HITBOX_R = 13
 const MOLE_SCREEN_X = 180
 const BOUNCE_FRAMES = 28
 
@@ -292,29 +291,40 @@ export default function FlappyMole() {
       // Cull pipes that scrolled off screen left
       s.pipes = s.pipes.filter(p => (p.worldX - s.distance + MOLE_SCREEN_X) > -PIPE_W - 10)
 
-      // Collision + pass-detection (hitbox slightly smaller than visible body for fair play)
-      const moleWorldX = s.distance + MOLE_SCREEN_X
-      const moleL = moleWorldX - HITBOX_W / 2
-      const moleR = moleWorldX + HITBOX_W / 2
-      const moleT = s.moleY - HITBOX_H / 2
-      const moleB = s.moleY + HITBOX_H / 2
+      // Collision (circle vs pipe rectangles) + pass-detection
+      const moleCx = s.distance + MOLE_SCREEN_X
+      const moleCy = s.moleY
+      const r2 = HITBOX_R * HITBOX_R
       for (const p of s.pipes) {
-        if (!p.passed && p.worldX + PIPE_W < moleWorldX - HITBOX_W / 2) {
+        if (!p.passed && p.worldX + PIPE_W < moleCx - HITBOX_R) {
           p.passed = true
           fnRef.current.playPass?.()
         }
-        const pR = p.worldX + PIPE_W
-        const xOverlap = moleR > p.worldX && moleL < pR
-        if (!xOverlap) continue
+        // Coarse skip: pipe entirely left or right of mole circle
+        if (moleCx + HITBOX_R < p.worldX) continue
+        if (moleCx - HITBOX_R > p.worldX + PIPE_W) continue
+
         const gapTop = p.gapY - p.gapH / 2
         const gapBot = p.gapY + p.gapH / 2
-        if (moleT < gapTop || moleB > gapBot) {
+
+        // Top pipe rect: [p.worldX, 0] → [p.worldX + PIPE_W, gapTop]
+        const txc = clamp(moleCx, p.worldX, p.worldX + PIPE_W)
+        const tyc = clamp(moleCy, 0, gapTop)
+        const tdx = moleCx - txc, tdy = moleCy - tyc
+        const hitTop = tdx * tdx + tdy * tdy < r2
+
+        // Bottom pipe rect: [p.worldX, gapBot] → [p.worldX + PIPE_W, BOARD_H]
+        const bxc = clamp(moleCx, p.worldX, p.worldX + PIPE_W)
+        const byc = clamp(moleCy, gapBot, BOARD_H)
+        const bdx = moleCx - bxc, bdy = moleCy - byc
+        const hitBot = bdx * bdx + bdy * bdy < r2
+
+        if (hitTop || hitBot) {
           s.dead = true
           s.flash = 14
           s.bounceFrames = BOUNCE_FRAMES
           s.bounceVx = -6
-          // Knock the mole toward the nearest open space (away from the pipe it hit)
-          s.bounceVy = (moleT < gapTop) ? 5 : -5
+          s.bounceVy = hitTop ? 5 : -5
           fnRef.current.playCrash?.()
           break
         }
