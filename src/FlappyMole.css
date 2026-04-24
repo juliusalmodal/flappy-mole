@@ -63,10 +63,11 @@
   gap: 1rem;
   background: var(--surface);
   border: 1px solid var(--rule);
-  padding: 0.9rem 1rem;
+  padding: 1rem 1.2rem;
   border-radius: 10px;
-  max-width: 380px;
+  max-width: 460px;
   margin: 0 auto 1.6rem;
+  flex-wrap: wrap;
 }
 .fm-user-info {
   flex: 1;
