@@ -44,54 +44,78 @@ function pipeSpacing(distance) {
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
 
 // === Obstacle drawing helpers ===
-function drawBlocks(ctx, x, gapTop, gapBot, rnd, biome) {
-  // Mined ore-block stacks — dense grid covering the full collision rect
-  const drawStack = (yStart, yEnd, seedOffset) => {
-    // Dirt backing under the blocks so no empty gaps
-    const bg = ctx.createLinearGradient(x, yStart, x, yEnd)
-    bg.addColorStop(0, '#2a1810')
-    bg.addColorStop(1, '#1a0e05')
-    ctx.fillStyle = bg
-    ctx.fillRect(x - 2, yStart, PIPE_W + 4, yEnd - yStart)
-
-    const blockSize = 28
-    const cols = 2
+function drawStones(ctx, x, gapTop, gapBot, rnd, biome) {
+  // Irregular rounded stones packed together
+  const drawPile = (yStart, yEnd, seedOffset) => {
+    const rows = 5
+    const h = yEnd - yStart
     let i = seedOffset
-    for (let by = yStart; by < yEnd; by += blockSize - 2) {
-      for (let c = 0; c < cols; c++) {
-        const bx = x + c * (PIPE_W / cols) + (rnd(i + 1) - 0.5) * 3
-        const jitterY = (rnd(i + 2) - 0.5) * 2
-        const size = blockSize - rnd(i + 3) * 2
-        const left = bx
-        const top = by + jitterY
+    for (let r = 0; r < rows; r++) {
+      const rowY = yStart + (h / rows) * (r + 0.5)
+      const perRow = 2 + Math.floor(rnd(i) * 2) // 2 or 3 stones per row
+      for (let c = 0; c < perRow; c++) {
+        const cx = x + (c + 0.5) * (PIPE_W / perRow) + (rnd(i + 1) - 0.5) * 10
+        const cy = rowY + (rnd(i + 2) - 0.5) * 12
+        const avgR = 14 + rnd(i + 3) * 10
+        const verts = 6 + Math.floor(rnd(i + 4) * 3) // 6-8 vertices for organic stone shape
 
-        // Shadow
+        // Outline shadow under the stone
         ctx.fillStyle = 'rgba(0,0,0,0.55)'
-        ctx.fillRect(left + 2, top + 2, size, size)
-        // Block face (color varies a bit per block for an ore-y look)
-        ctx.fillStyle = rnd(i + 4) > 0.7 ? '#7e5530' : '#6b4529'
-        ctx.fillRect(left, top, size, size)
-        // Inner bevel light (top + left)
-        ctx.fillStyle = 'rgba(230,180,140,0.45)'
-        ctx.fillRect(left, top, size, 3)
-        ctx.fillRect(left, top, 3, size)
-        // Inner bevel dark (bottom + right)
-        ctx.fillStyle = 'rgba(0,0,0,0.5)'
-        ctx.fillRect(left, top + size - 3, size, 3)
-        ctx.fillRect(left + size - 3, top, 3, size)
-        // Ore fleck (not on every block)
-        if (rnd(i + 5) > 0.4) {
-          ctx.fillStyle = 'rgba(201,122,74,0.55)'
-          ctx.fillRect(left + size * 0.4, top + size * 0.4, 3, 3)
+        ctx.beginPath()
+        for (let v = 0; v < verts; v++) {
+          const ang = (v / verts) * Math.PI * 2
+          const rr = avgR * (0.85 + rnd(i + 5 + v) * 0.3)
+          const vx = cx + Math.cos(ang) * rr + 2
+          const vy = cy + Math.sin(ang) * rr + 3
+          if (v === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy)
+        }
+        ctx.closePath()
+        ctx.fill()
+
+        // Stone body (irregular polygon)
+        ctx.beginPath()
+        for (let v = 0; v < verts; v++) {
+          const ang = (v / verts) * Math.PI * 2
+          const rr = avgR * (0.85 + rnd(i + 5 + v) * 0.3)
+          const vx = cx + Math.cos(ang) * rr
+          const vy = cy + Math.sin(ang) * rr
+          if (v === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy)
+        }
+        ctx.closePath()
+        const grad = ctx.createLinearGradient(cx - avgR, cy - avgR, cx + avgR, cy + avgR)
+        grad.addColorStop(0, '#7a6a58')
+        grad.addColorStop(0.55, '#4c403a')
+        grad.addColorStop(1, '#2a2420')
+        ctx.fillStyle = grad
+        ctx.fill()
+
+        // Subtle outline
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)'
+        ctx.lineWidth = 1
+        ctx.stroke()
+
+        // Top-left specular highlight
+        ctx.fillStyle = 'rgba(255,240,220,0.18)'
+        ctx.beginPath()
+        ctx.ellipse(cx - avgR * 0.35, cy - avgR * 0.4, avgR * 0.35, avgR * 0.2, -0.4, 0, Math.PI * 2)
+        ctx.fill()
+
+        // Tiny crack / spec
+        if (rnd(i + 30) > 0.6) {
+          ctx.strokeStyle = 'rgba(0,0,0,0.35)'
+          ctx.lineWidth = 0.8
+          ctx.beginPath()
+          ctx.moveTo(cx - avgR * 0.3, cy)
+          ctx.lineTo(cx + avgR * 0.3, cy + rnd(i + 31) * 4 - 2)
+          ctx.stroke()
         }
 
-        i++
+        i += 8
       }
-      i += 7
     }
   }
-  drawStack(-4, gapTop + 2, 0)
-  drawStack(gapBot - 2, BOARD_H + 4, 1000)
+  drawPile(-8, gapTop + 4, 0)
+  drawPile(gapBot - 4, BOARD_H + 8, 500)
 }
 
 function decodeJwt(token) {
@@ -202,6 +226,7 @@ export default function FlappyMole() {
   const audioCtxRef = useRef(null)
   const fnRef = useRef({})
   const moleImagesRef = useRef(null)
+  const soilCanvasRef = useRef(null)
 
   // Preload mole sprites
   useEffect(() => {
@@ -312,8 +337,15 @@ export default function FlappyMole() {
       bounceVy: 0,
       moleXOffset: 0,
       collision: null, // { worldX, worldY, pipeScreenX, pipeGapTop, pipeGapBot, hitTop }
+      trail: [], // carved path {worldX, worldY} — mole scoops out soil as it moves
     }
     setDepth(0)
+
+    // Offscreen canvas for the soil layer (where we can "erase" to carve a tunnel)
+    const soil = document.createElement('canvas')
+    soil.width = BOARD_W
+    soil.height = BOARD_H
+    soilCanvasRef.current = soil
 
     const tick = () => {
       const s = stateRef.current
@@ -362,6 +394,14 @@ export default function FlappyMole() {
 
       // Cull pipes that scrolled off screen left
       s.pipes = s.pipes.filter(p => (p.worldX - s.distance) > -PIPE_W - 10)
+
+      // Record the mole's world position to carve the soil trail
+      const mWX = s.distance + MOLE_SCREEN_X
+      s.trail.push({ x: mWX, y: s.moleY })
+      // Prune trail points off the left edge of the screen (+margin for the carve radius)
+      while (s.trail.length > 0 && s.trail[0].x < s.distance - 40) {
+        s.trail.shift()
+      }
 
       // Collision (circle vs pipe rectangles) + pass-detection
       const moleCx = s.distance + MOLE_SCREEN_X
@@ -425,29 +465,31 @@ export default function FlappyMole() {
   }, [phase])
 
   const render = (ctx, s) => {
-    // Biome tint shifts with distance
+    // Biome palette (soil + tunnel-interior colors vary with distance)
     const distM = s.distance / PX_PER_METER
     const biomeIdx = Math.min(3, Math.floor(distM / 100))
     const biomes = [
-      { top: '#3a2a1d', bot: '#241509' },     // dirt
-      { top: '#3a2624', bot: '#1d0e0e' },     // clay
-      { top: '#2d2129', bot: '#140c1a' },     // rock
-      { top: '#1a2232', bot: '#0a1224' },     // crystal cave
+      { soil: '#4a301a', soilDark: '#2a1a0d', voidA: '#120a05', voidB: '#080503' }, // dirt
+      { soil: '#4a2c26', soilDark: '#2a1614', voidA: '#120707', voidB: '#080303' }, // clay
+      { soil: '#3a2e38', soilDark: '#201820', voidA: '#0a0610', voidB: '#050308' }, // rock
+      { soil: '#2a3448', soilDark: '#141d2b', voidA: '#060a14', voidB: '#03050a' }, // crystal cave
     ]
     const b = biomes[biomeIdx]
+
+    // 1) Tunnel void (what's behind the carved path) — fills the whole canvas as the "empty" base
     const g = ctx.createLinearGradient(0, 0, 0, BOARD_H)
-    g.addColorStop(0, b.top)
-    g.addColorStop(0.5, b.bot)
-    g.addColorStop(1, b.top)
+    g.addColorStop(0, b.voidA)
+    g.addColorStop(0.5, b.voidB)
+    g.addColorStop(1, b.voidA)
     ctx.fillStyle = g
     ctx.fillRect(0, 0, BOARD_W, BOARD_H)
 
-    // Scrolling dirt specks for motion cue (horizontal parallax)
+    // 2) Scrolling dirt specks (subtle motion in the void)
     const parallax = s.distance * 0.5
     ctx.save()
-    ctx.globalAlpha = 0.22
+    ctx.globalAlpha = 0.18
     ctx.fillStyle = '#000'
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 60; i++) {
       const seed = i * 41.17
       const x = ((seed * 17) - parallax) % BOARD_W
       const xx = x < 0 ? x + BOARD_W : x
@@ -455,6 +497,58 @@ export default function FlappyMole() {
       ctx.fillRect(xx, y, 2, 2)
     }
     ctx.restore()
+
+    // 3) Soil layer (offscreen) — solid soil, then carve a tunnel along the mole's trail
+    const soil = soilCanvasRef.current
+    if (soil) {
+      const sctx = soil.getContext('2d')
+      // Fill with soil color (uniform, with a subtle vertical gradient)
+      const sg = sctx.createLinearGradient(0, 0, 0, BOARD_H)
+      sg.addColorStop(0, b.soil)
+      sg.addColorStop(0.5, b.soilDark)
+      sg.addColorStop(1, b.soil)
+      sctx.globalCompositeOperation = 'source-over'
+      sctx.fillStyle = sg
+      sctx.fillRect(0, 0, BOARD_W, BOARD_H)
+
+      // Add small pebble specks baked into the soil for texture
+      sctx.globalAlpha = 0.22
+      sctx.fillStyle = '#000'
+      for (let i = 0; i < 90; i++) {
+        const seed = i * 97.3
+        const x = ((seed * 13) - parallax) % BOARD_W
+        const xx = x < 0 ? x + BOARD_W : x
+        const y = (seed * 31) % BOARD_H
+        sctx.fillRect(xx, y, 2, 2)
+      }
+      sctx.globalAlpha = 1
+
+      // Carve the trail out of the soil
+      sctx.globalCompositeOperation = 'destination-out'
+      sctx.lineCap = 'round'
+      sctx.lineJoin = 'round'
+      sctx.lineWidth = MOLE_SIZE * 1.4
+      if (s.trail.length > 1) {
+        sctx.beginPath()
+        for (let i = 0; i < s.trail.length; i++) {
+          const pt = s.trail[i]
+          const sx = pt.x - s.distance
+          if (i === 0) sctx.moveTo(sx, pt.y)
+          else sctx.lineTo(sx, pt.y)
+        }
+        sctx.stroke()
+      } else if (s.trail.length === 1) {
+        const pt = s.trail[0]
+        const sx = pt.x - s.distance
+        sctx.beginPath()
+        sctx.arc(sx, pt.y, MOLE_SIZE * 0.7, 0, Math.PI * 2)
+        sctx.fill()
+      }
+      sctx.globalCompositeOperation = 'source-over'
+
+      // Draw soil onto main canvas
+      ctx.drawImage(soil, 0, 0, BOARD_W, BOARD_H)
+    }
 
     // Ceiling and floor rock bands
     const bandH = 12
@@ -482,7 +576,7 @@ export default function FlappyMole() {
         return x - Math.floor(x)
       }
 
-      drawBlocks(ctx, screenX, gapTop, gapBot, rnd, b)
+      drawStones(ctx, screenX, gapTop, gapBot, rnd, b)
     }
 
     // Mole sprite — swap images based on current input (up / down / idle-right)
