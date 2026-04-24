@@ -2,31 +2,34 @@ import { useState, useEffect, useRef } from 'react'
 import { GOOGLE_CLIENT_ID } from './config'
 import './FlappyMole.css'
 
-const BOARD_W = 400
-const BOARD_H = 640
-const MOLE_SIZE = 32
-const MOLE_SCREEN_Y = 180
+const BOARD_W = 900
+const BOARD_H = 540
+const MOLE_SIZE = 30
+const MOLE_SCREEN_X = 180
 
-const BUOYANCY = -0.22
-const DIG_FORCE = 0.95
-const VY_MAX = 11
-const VY_MIN = -3.2
+const SCROLL_SPEED_START = 2.6
+const SCROLL_SPEED_MAX = 5.4
 
-const STEER_ACCEL = 0.55
-const STEER_MAX = 5.5
-const STEER_DECAY = 0.88
+const VY_MAX = 4.6
+const VY_ACCEL = 0.42
+const VY_DECAY = 0.80
 
-const WALL_H = 22
-const OBSTACLE_SPACING = 220
-const FIRST_OBSTACLE_Y = 520
-const GAP_W_START = 160
-const GAP_W_MIN = 74
+const PIPE_W = 64
+const PIPE_SPACING = 280
+const FIRST_PIPE_X = 700
+const GAP_H_START = 200
+const GAP_H_MIN = 120
+const GAP_MARGIN = 60
 
 const PX_PER_METER = 10
 
-// Ramps from 0.45 at surface to 1.0 at ~1800 world px, so early dig is slow.
-function intensity(worldY) {
-  return Math.min(1.0, 0.45 + (worldY / 1800) * 0.55)
+function scrollSpeed(distance) {
+  const t = Math.min(1, distance / 6000)
+  return SCROLL_SPEED_START + (SCROLL_SPEED_MAX - SCROLL_SPEED_START) * t
+}
+function gapHeight(distance) {
+  const t = Math.min(1, distance / 4500)
+  return GAP_H_START - (GAP_H_START - GAP_H_MIN) * t
 }
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
@@ -134,7 +137,7 @@ export default function FlappyMole() {
   const signInRef = useRef(null)
   const rafRef = useRef(null)
   const stateRef = useRef(null)
-  const inputRef = useRef({ digging: false, left: false, right: false })
+  const inputRef = useRef({ up: false, down: false })
   const userRef = useRef(null)
   const audioCtxRef = useRef(null)
   const fnRef = useRef({})
@@ -218,16 +221,14 @@ export default function FlappyMole() {
     ro.observe(canvas)
 
     stateRef.current = {
-      worldY: 0,
-      moleX: BOARD_W / 2,
+      distance: 0,
+      moleY: MOLE_SIZE,
       vy: 0,
-      vx: 0,
-      obstacles: [],
-      nextObstacleY: FIRST_OBSTACLE_Y,
-      nextObstacleId: 1,
+      pipes: [],
+      nextPipeX: FIRST_PIPE_X,
+      nextPipeId: 1,
       dead: false,
       flash: 0,
-      tilt: 0,
     }
     setDepth(0)
 
@@ -235,48 +236,50 @@ export default function FlappyMole() {
       const s = stateRef.current
       const i = inputRef.current
 
-      // Vertical physics — intensity ramps up with depth so early dig feels controllable
-      const I = intensity(s.worldY)
-      s.vy += BUOYANCY
-      if (i.digging) s.vy += DIG_FORCE * I
-      s.vy = clamp(s.vy, VY_MIN, VY_MAX * I)
-      s.worldY = Math.max(0, s.worldY + s.vy)
+      // Scroll world
+      const speed = scrollSpeed(s.distance)
+      s.distance += speed
 
-      // Horizontal
-      if (i.left)  s.vx -= STEER_ACCEL
-      if (i.right) s.vx += STEER_ACCEL
-      if (!i.left && !i.right) s.vx *= STEER_DECAY
-      s.vx = clamp(s.vx, -STEER_MAX, STEER_MAX)
-      s.moleX = clamp(s.moleX + s.vx, MOLE_SIZE / 2, BOARD_W - MOLE_SIZE / 2)
-      s.tilt = s.vx / STEER_MAX
+      // Vertical physics — direct velocity control (flappy-style but with both directions)
+      if (i.up && !i.down)      s.vy -= VY_ACCEL
+      else if (i.down && !i.up) s.vy += VY_ACCEL
+      else                      s.vy *= VY_DECAY
+      s.vy = clamp(s.vy, -VY_MAX, VY_MAX)
+      s.moleY = clamp(s.moleY + s.vy, MOLE_SIZE / 2, BOARD_H - MOLE_SIZE / 2)
+      // Kill velocity when clamped against bounds
+      if (s.moleY <= MOLE_SIZE / 2 && s.vy < 0) s.vy = 0
+      if (s.moleY >= BOARD_H - MOLE_SIZE / 2 && s.vy > 0) s.vy = 0
 
-      // Spawn obstacles
-      while (s.nextObstacleY < s.worldY + BOARD_H * 1.5) {
-        const d = s.nextObstacleY
-        const gapW = Math.max(GAP_W_MIN, GAP_W_START - Math.floor(d / 500) * 10)
-        const gapX = gapW / 2 + 12 + Math.random() * (BOARD_W - gapW - 24)
-        s.obstacles.push({ id: s.nextObstacleId++, worldY: d, gapX, gapW, passed: false })
-        s.nextObstacleY += OBSTACLE_SPACING
+      // Spawn new pipe pair when the frontier isn't far enough ahead
+      while (s.nextPipeX - s.distance < BOARD_W + PIPE_SPACING) {
+        const gH = gapHeight(s.distance)
+        const gapMin = GAP_MARGIN + gH / 2
+        const gapMax = BOARD_H - GAP_MARGIN - gH / 2
+        const gapY = gapMin + Math.random() * (gapMax - gapMin)
+        s.pipes.push({ id: s.nextPipeId++, worldX: s.nextPipeX, gapY, gapH: gH, passed: false })
+        s.nextPipeX += PIPE_SPACING
       }
 
-      const viewTop = s.worldY - MOLE_SCREEN_Y
-      s.obstacles = s.obstacles.filter(o => o.worldY + WALL_H >= viewTop - 60)
+      // Cull pipes that scrolled off screen left
+      s.pipes = s.pipes.filter(p => (p.worldX - s.distance + MOLE_SCREEN_X) > -PIPE_W - 10)
 
       // Collision + pass-detection
-      const moleTopW = s.worldY - MOLE_SIZE / 2
-      const moleBotW = s.worldY + MOLE_SIZE / 2
-      for (const o of s.obstacles) {
-        if (!o.passed && o.worldY + WALL_H < s.worldY - MOLE_SIZE / 2) {
-          o.passed = true
+      const moleWorldX = s.distance + MOLE_SCREEN_X
+      const moleL = moleWorldX - MOLE_SIZE / 2
+      const moleR = moleWorldX + MOLE_SIZE / 2
+      const moleT = s.moleY - MOLE_SIZE / 2
+      const moleB = s.moleY + MOLE_SIZE / 2
+      for (const p of s.pipes) {
+        if (!p.passed && p.worldX + PIPE_W < moleWorldX - MOLE_SIZE / 2) {
+          p.passed = true
           fnRef.current.playPass?.()
         }
-        const yOverlap = moleBotW > o.worldY && moleTopW < o.worldY + WALL_H
-        if (!yOverlap) continue
-        const moleL = s.moleX - MOLE_SIZE / 2
-        const moleR = s.moleX + MOLE_SIZE / 2
-        const gapL = o.gapX - o.gapW / 2
-        const gapR = o.gapX + o.gapW / 2
-        if (moleL < gapL || moleR > gapR) {
+        const pR = p.worldX + PIPE_W
+        const xOverlap = moleR > p.worldX && moleL < pR
+        if (!xOverlap) continue
+        const gapTop = p.gapY - p.gapH / 2
+        const gapBot = p.gapY + p.gapH / 2
+        if (moleT < gapTop || moleB > gapBot) {
           s.dead = true
           s.flash = 8
           fnRef.current.playCrash?.()
@@ -284,7 +287,7 @@ export default function FlappyMole() {
         }
       }
 
-      setDepth(Math.floor(s.worldY / PX_PER_METER))
+      setDepth(Math.floor(s.distance / PX_PER_METER))
 
       render(ctx, s)
 
@@ -303,9 +306,9 @@ export default function FlappyMole() {
   }, [phase])
 
   const render = (ctx, s) => {
-    // Background bands that shift as mole descends
-    const depthM = s.worldY / PX_PER_METER
-    const biomeIdx = Math.min(3, Math.floor(depthM / 100))
+    // Biome tint shifts with distance
+    const distM = s.distance / PX_PER_METER
+    const biomeIdx = Math.min(3, Math.floor(distM / 100))
     const biomes = [
       { top: '#3a2a1d', bot: '#241509' },     // dirt
       { top: '#3a2624', bot: '#1d0e0e' },     // clay
@@ -315,76 +318,91 @@ export default function FlappyMole() {
     const b = biomes[biomeIdx]
     const g = ctx.createLinearGradient(0, 0, 0, BOARD_H)
     g.addColorStop(0, b.top)
-    g.addColorStop(1, b.bot)
+    g.addColorStop(0.5, b.bot)
+    g.addColorStop(1, b.top)
     ctx.fillStyle = g
     ctx.fillRect(0, 0, BOARD_W, BOARD_H)
 
-    // Scrolling dirt-speck layer for motion cue
-    const parallax = s.worldY * 0.5
+    // Scrolling dirt specks for motion cue (horizontal parallax)
+    const parallax = s.distance * 0.5
     ctx.save()
-    ctx.globalAlpha = 0.26
+    ctx.globalAlpha = 0.22
     ctx.fillStyle = '#000'
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 80; i++) {
       const seed = i * 41.17
-      const x = (seed * 17) % BOARD_W
-      const y = ((seed * 23) - parallax) % BOARD_H
-      const yy = y < 0 ? y + BOARD_H : y
-      ctx.fillRect(x, yy, 2, 2)
+      const x = ((seed * 17) - parallax) % BOARD_W
+      const xx = x < 0 ? x + BOARD_W : x
+      const y = (seed * 23) % BOARD_H
+      ctx.fillRect(xx, y, 2, 2)
     }
     ctx.restore()
 
-    // Obstacles
-    for (const o of s.obstacles) {
-      const screenY = o.worldY - s.worldY + MOLE_SCREEN_Y
-      if (screenY < -WALL_H || screenY > BOARD_H + WALL_H) continue
-      const gapL = o.gapX - o.gapW / 2
-      const gapR = o.gapX + o.gapW / 2
+    // Ceiling and floor rock bands
+    const bandH = 12
+    const rockGradTop = ctx.createLinearGradient(0, 0, 0, bandH)
+    rockGradTop.addColorStop(0, '#1b0f06')
+    rockGradTop.addColorStop(1, b.top)
+    ctx.fillStyle = rockGradTop
+    ctx.fillRect(0, 0, BOARD_W, bandH)
+    const rockGradBot = ctx.createLinearGradient(0, BOARD_H - bandH, 0, BOARD_H)
+    rockGradBot.addColorStop(0, b.top)
+    rockGradBot.addColorStop(1, '#1b0f06')
+    ctx.fillStyle = rockGradBot
+    ctx.fillRect(0, BOARD_H - bandH, BOARD_W, bandH)
 
-      // Left wall
-      const wallGradL = ctx.createLinearGradient(0, screenY, 0, screenY + WALL_H)
-      wallGradL.addColorStop(0, '#6b4529')
-      wallGradL.addColorStop(1, '#2f1d11')
-      ctx.fillStyle = wallGradL
-      ctx.fillRect(0, screenY, gapL, WALL_H)
-      ctx.fillRect(gapR, screenY, BOARD_W - gapR, WALL_H)
+    // Pipes (top + bottom columns with a gap)
+    for (const p of s.pipes) {
+      const screenX = p.worldX - s.distance + MOLE_SCREEN_X
+      if (screenX < -PIPE_W || screenX > BOARD_W) continue
+      const gapTop = p.gapY - p.gapH / 2
+      const gapBot = p.gapY + p.gapH / 2
 
-      // Rim highlight
-      ctx.fillStyle = 'rgba(201,122,74,0.45)'
-      ctx.fillRect(0, screenY, gapL, 2)
-      ctx.fillRect(gapR, screenY, BOARD_W - gapR, 2)
+      const grad = ctx.createLinearGradient(screenX, 0, screenX + PIPE_W, 0)
+      grad.addColorStop(0, '#2f1d11')
+      grad.addColorStop(0.5, '#6b4529')
+      grad.addColorStop(1, '#2f1d11')
+      ctx.fillStyle = grad
+      ctx.fillRect(screenX, 0, PIPE_W, gapTop)
+      ctx.fillRect(screenX, gapBot, PIPE_W, BOARD_H - gapBot)
+
+      // Rim / edge highlights around the gap
+      ctx.fillStyle = 'rgba(201,122,74,0.55)'
+      ctx.fillRect(screenX - 2, gapTop - 6, PIPE_W + 4, 6)
+      ctx.fillRect(screenX - 2, gapBot, PIPE_W + 4, 6)
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'
+      ctx.fillRect(screenX, gapTop - 2, PIPE_W, 2)
+      ctx.fillRect(screenX, gapBot, PIPE_W, 2)
     }
 
-    // Mole
+    // Mole (facing right, tilted by vy)
     ctx.save()
-    ctx.translate(s.moleX, MOLE_SCREEN_Y)
-    ctx.rotate(s.tilt * 0.35)
+    ctx.translate(MOLE_SCREEN_X, s.moleY)
+    const tilt = clamp(s.vy / VY_MAX, -1, 1) * 0.45
+    ctx.rotate(tilt)
     // Body
     ctx.fillStyle = '#4a2e1a'
     ctx.beginPath()
-    ctx.ellipse(0, 0, MOLE_SIZE / 2, MOLE_SIZE / 2 * 1.15, 0, 0, Math.PI * 2)
+    ctx.ellipse(0, 0, MOLE_SIZE / 2 * 1.15, MOLE_SIZE / 2, 0, 0, Math.PI * 2)
     ctx.fill()
     // Belly
     ctx.fillStyle = '#d9b38a'
     ctx.beginPath()
-    ctx.ellipse(0, 3, MOLE_SIZE / 2 * 0.55, MOLE_SIZE / 2 * 0.7, 0, 0, Math.PI * 2)
+    ctx.ellipse(-3, 2, MOLE_SIZE / 2 * 0.7, MOLE_SIZE / 2 * 0.55, 0, 0, Math.PI * 2)
     ctx.fill()
-    // Nose
+    // Snout (front-facing right)
     ctx.fillStyle = '#f0a070'
     ctx.beginPath()
-    ctx.ellipse(0, -MOLE_SIZE / 2 + 2, 3.5, 3, 0, 0, Math.PI * 2)
+    ctx.ellipse(MOLE_SIZE / 2 * 0.95, 1, 4, 3.2, 0, 0, Math.PI * 2)
     ctx.fill()
-    // Eyes
+    // Eye
     ctx.fillStyle = '#111'
-    ctx.fillRect(-6, -5, 2, 2)
-    ctx.fillRect(4,  -5, 2, 2)
-    // Claws
+    ctx.fillRect(4, -5, 2, 2)
+    // Claws (front paws reaching right)
     ctx.strokeStyle = '#e8d2b0'
     ctx.lineWidth = 1.4
     ctx.beginPath()
-    ctx.moveTo(-10, 8); ctx.lineTo(-13, 11)
-    ctx.moveTo(-8,  9); ctx.lineTo(-10, 13)
-    ctx.moveTo(10,  8); ctx.lineTo(13, 11)
-    ctx.moveTo(8,   9); ctx.lineTo(10, 13)
+    ctx.moveTo(10, 6);  ctx.lineTo(14, 7)
+    ctx.moveTo(10, 9);  ctx.lineTo(14, 11)
     ctx.stroke()
     ctx.restore()
 
@@ -481,46 +499,41 @@ export default function FlappyMole() {
   useEffect(() => {
     if (phase !== 'playing' && phase !== 'countdown') return
     const keydown = (e) => {
-      if (e.key === ' ' || e.key === 'ArrowDown') { inputRef.current.digging = true; e.preventDefault() }
-      if (e.key === 'ArrowLeft')  inputRef.current.left = true
-      if (e.key === 'ArrowRight') inputRef.current.right = true
+      if (e.key === 'ArrowUp')                          { inputRef.current.up = true; e.preventDefault() }
+      if (e.key === 'ArrowDown' || e.key === ' ')       { inputRef.current.down = true; e.preventDefault() }
     }
     const keyup = (e) => {
-      if (e.key === ' ' || e.key === 'ArrowDown') inputRef.current.digging = false
-      if (e.key === 'ArrowLeft')  inputRef.current.left = false
-      if (e.key === 'ArrowRight') inputRef.current.right = false
+      if (e.key === 'ArrowUp')                          inputRef.current.up = false
+      if (e.key === 'ArrowDown' || e.key === ' ')       inputRef.current.down = false
     }
     window.addEventListener('keydown', keydown)
     window.addEventListener('keyup', keyup)
     return () => {
       window.removeEventListener('keydown', keydown)
       window.removeEventListener('keyup', keyup)
-      inputRef.current = { digging: false, left: false, right: false }
+      inputRef.current = { up: false, down: false }
     }
   }, [phase])
 
+  const setTouchDirection = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = (e.clientY - rect.top) / rect.height
+    inputRef.current.up = y < 0.5
+    inputRef.current.down = y >= 0.5
+  }
   const onPointerDown = (e) => {
     if (phase !== 'playing') return
     e.preventDefault()
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = (e.clientX - rect.left) / rect.width
-    inputRef.current.digging = true
-    if (x < 0.33) { inputRef.current.left = true; inputRef.current.right = false }
-    else if (x > 0.67) { inputRef.current.right = true; inputRef.current.left = false }
-    else { inputRef.current.left = false; inputRef.current.right = false }
+    setTouchDirection(e)
   }
   const onPointerMove = (e) => {
-    if (phase !== 'playing' || !inputRef.current.digging) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = (e.clientX - rect.left) / rect.width
-    if (x < 0.33) { inputRef.current.left = true; inputRef.current.right = false }
-    else if (x > 0.67) { inputRef.current.right = true; inputRef.current.left = false }
-    else { inputRef.current.left = false; inputRef.current.right = false }
+    if (phase !== 'playing') return
+    if (!(inputRef.current.up || inputRef.current.down)) return
+    setTouchDirection(e)
   }
   const onPointerUp = () => {
-    inputRef.current.digging = false
-    inputRef.current.left = false
-    inputRef.current.right = false
+    inputRef.current.up = false
+    inputRef.current.down = false
   }
 
   const beginGame = () => {
@@ -555,8 +568,8 @@ export default function FlappyMole() {
           <p className="fm-label">Mini Game</p>
           <h1 className="fm-heading">Flappy-<em>Mole.</em></h1>
           <p className="fm-sub">
-            Dig as deep as you dare.<br />
-            Hold to dig — release to float up. Dodge the walls.
+            Tunnel as far as you can.<br />
+            Dig up and down to slip through the gaps.
           </p>
 
           {user ? (
@@ -586,8 +599,8 @@ export default function FlappyMole() {
 
           <div className="fm-controls-hint">
             <p className="fm-label">Controls</p>
-            <p><strong>Desktop:</strong> Space / ↓ — dig. ← / → — steer.</p>
-            <p><strong>Mobile:</strong> Tap &amp; hold — dig. Left / center / right zones steer.</p>
+            <p><strong>Desktop:</strong> ↑ — dig up. ↓ / Space — dig down.</p>
+            <p><strong>Mobile:</strong> Tap upper half to dig up, lower half to dig down.</p>
           </div>
 
           <Leaderboard data={leaderboard} highlightSub={null} />
