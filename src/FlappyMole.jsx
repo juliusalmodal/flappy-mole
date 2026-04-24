@@ -27,7 +27,7 @@ const GAP_MARGIN = 60
 const PX_PER_METER = 10
 const DEBUG_HITBOX = false
 
-const PIPE_TYPES = ['rocks', 'stalactites', 'roots']
+const PIPE_TYPES = ['boulders', 'crystals', 'blocks']
 
 function scrollSpeed(distance) {
   const t = Math.min(1, distance / 12000)
@@ -45,154 +45,136 @@ function pipeSpacing(distance) {
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
 
 // === Obstacle drawing helpers ===
-function fillPipeColumn(ctx, x, y, w, h, lightColor, darkColor) {
-  const g = ctx.createLinearGradient(x, 0, x + w, 0)
-  g.addColorStop(0, darkColor)
-  g.addColorStop(0.5, lightColor)
-  g.addColorStop(1, darkColor)
-  ctx.fillStyle = g
-  ctx.fillRect(x, y, w, h)
+function drawBoulders(ctx, x, gapTop, gapBot, rnd, biome) {
+  // Round boulder piles — circles overlapping to fill the column with a bumpy silhouette
+  const drawPile = (yStart, yEnd, seedOffset) => {
+    const rows = 4
+    const h = yEnd - yStart
+    for (let r = 0; r < rows; r++) {
+      const rowY = yStart + (h / rows) * r + (h / rows) / 2
+      const cols = 2
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c + seedOffset
+        const cx = x + (c === 0 ? 0.25 : 0.75) * PIPE_W + (rnd(i) - 0.5) * 14
+        const cy = rowY + (rnd(i + 1) - 0.5) * 14
+        const radius = 18 + rnd(i + 2) * 12
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.beginPath()
+        ctx.arc(cx + 3, cy + 3, radius, 0, Math.PI * 2)
+        ctx.fill()
+        // Main boulder body
+        ctx.fillStyle = '#5a3a1f'
+        ctx.beginPath()
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+        ctx.fill()
+        // Top-left highlight
+        ctx.fillStyle = 'rgba(201,122,74,0.4)'
+        ctx.beginPath()
+        ctx.arc(cx - radius * 0.35, cy - radius * 0.35, radius * 0.45, 0, Math.PI * 2)
+        ctx.fill()
+        // Small dark speck for texture
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'
+        ctx.fillRect(cx + radius * 0.1, cy - radius * 0.1, 2, 2)
+      }
+    }
+  }
+  drawPile(-8, gapTop + 4, 0)
+  drawPile(gapBot - 4, BOARD_H + 8, 100)
 }
 
-function drawRocks(ctx, x, gapTop, gapBot, rnd, biome) {
-  // Rough, jagged dirt walls with rocky silhouette along the gap edge
-  fillPipeColumn(ctx, x, 0, PIPE_W, gapTop, '#7a5032', '#2f1d11')
-  fillPipeColumn(ctx, x, gapBot, PIPE_W, BOARD_H - gapBot, '#7a5032', '#2f1d11')
+function drawCrystals(ctx, x, gapTop, gapBot, rnd, biome) {
+  // Pointed triangular shards — angular silhouette with sharp tips toward the gap
+  const drawShards = (baseY, tipDirection, seedOffset) => {
+    // tipDirection: +1 = points down (top pipe), -1 = points up (bottom pipe)
+    const shardCount = 5
+    for (let i = 0; i < shardCount; i++) {
+      const cx = x + (i + 0.5) * (PIPE_W / shardCount) + (rnd(i + seedOffset) - 0.5) * 8
+      const halfBase = 8 + rnd(i + seedOffset + 10) * 6
+      const length = 34 + rnd(i + seedOffset + 20) * 40
+      const baseOffsetY = rnd(i + seedOffset + 30) * 18
+      const y0 = baseY + baseOffsetY * (tipDirection === 1 ? -1 : 1)
+      const tipY = y0 + length * tipDirection
 
-  // Jagged rim on the bottom of top pipe
-  const segments = 7
-  const stepX = PIPE_W / segments
-  ctx.fillStyle = '#4a2d17'
-  ctx.beginPath()
-  ctx.moveTo(x, gapTop)
-  for (let i = 0; i <= segments; i++) {
-    const px = x + i * stepX
-    const py = gapTop - 4 + rnd(i) * 10
-    ctx.lineTo(px, py)
-  }
-  ctx.lineTo(x + PIPE_W, gapTop - 12)
-  ctx.lineTo(x, gapTop - 12)
-  ctx.closePath()
-  ctx.fill()
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'
+      ctx.beginPath()
+      ctx.moveTo(cx - halfBase + 2, y0 + 2)
+      ctx.lineTo(cx + halfBase + 2, y0 + 2)
+      ctx.lineTo(cx + 2, tipY + 2)
+      ctx.closePath()
+      ctx.fill()
 
-  // Jagged rim on the top of bottom pipe
-  ctx.beginPath()
-  ctx.moveTo(x, gapBot)
-  for (let i = 0; i <= segments; i++) {
-    const px = x + i * stepX
-    const py = gapBot + 4 - rnd(i + 10) * 10
-    ctx.lineTo(px, py)
-  }
-  ctx.lineTo(x + PIPE_W, gapBot + 12)
-  ctx.lineTo(x, gapBot + 12)
-  ctx.closePath()
-  ctx.fill()
+      // Main crystal face (darker side)
+      ctx.fillStyle = '#6e4e2a'
+      ctx.beginPath()
+      ctx.moveTo(cx - halfBase, y0)
+      ctx.lineTo(cx + halfBase, y0)
+      ctx.lineTo(cx, tipY)
+      ctx.closePath()
+      ctx.fill()
 
-  // Small rock dots inside
-  ctx.fillStyle = 'rgba(0,0,0,0.4)'
-  for (let i = 0; i < 5; i++) {
-    const rx = x + rnd(i + 20) * PIPE_W
-    const ry = rnd(i + 30) * gapTop
-    ctx.fillRect(rx, ry, 2, 2)
+      // Lit facet on one edge
+      ctx.fillStyle = 'rgba(230,180,140,0.45)'
+      ctx.beginPath()
+      ctx.moveTo(cx - halfBase, y0)
+      ctx.lineTo(cx, tipY)
+      ctx.lineTo(cx - 2, y0)
+      ctx.closePath()
+      ctx.fill()
+    }
   }
-  for (let i = 0; i < 5; i++) {
-    const rx = x + rnd(i + 40) * PIPE_W
-    const ry = gapBot + rnd(i + 50) * (BOARD_H - gapBot)
-    ctx.fillRect(rx, ry, 2, 2)
-  }
+  // Base band at the ceiling / floor to anchor the shards
+  ctx.fillStyle = '#3a2515'
+  ctx.fillRect(x - 4, -4, PIPE_W + 8, 18)
+  ctx.fillRect(x - 4, BOARD_H - 14, PIPE_W + 8, 18)
+  drawShards(8, 1, 0)
+  drawShards(BOARD_H - 8, -1, 200)
 }
 
-function drawStalactites(ctx, x, gapTop, gapBot, rnd, biome) {
-  // Dark rocky background columns
-  fillPipeColumn(ctx, x, 0, PIPE_W, gapTop - 8, '#4f3a28', '#1f130a')
-  fillPipeColumn(ctx, x, gapBot + 8, PIPE_W, BOARD_H - gapBot - 8, '#4f3a28', '#1f130a')
+function drawBlocks(ctx, x, gapTop, gapBot, rnd, biome) {
+  // Mined ore-block stacks — square/rectangular blocks in an irregular stagger
+  const drawStack = (yStart, yEnd, seedOffset) => {
+    const blockSize = 26
+    const cols = 2
+    let i = seedOffset
+    for (let by = yStart; by < yEnd; by += blockSize - 2) {
+      for (let c = 0; c < cols; c++) {
+        // Random chance to skip a block for variety (but keep the near-gap ones)
+        const nearGap = (yStart < 50 ? (by > yEnd - blockSize * 1.5) : (by < yStart + blockSize * 1.5))
+        if (!nearGap && rnd(i) > 0.72) { i++; continue }
 
-  // Stalactites hanging from the top pipe (triangles pointing down)
-  const spikes = 4
-  const spikeW = PIPE_W / spikes
-  ctx.fillStyle = '#6b4a2d'
-  for (let i = 0; i < spikes; i++) {
-    const sx = x + i * spikeW
-    const tipLen = 6 + rnd(i) * 14
-    ctx.beginPath()
-    ctx.moveTo(sx, gapTop - 8)
-    ctx.lineTo(sx + spikeW, gapTop - 8)
-    ctx.lineTo(sx + spikeW / 2, gapTop + tipLen - 2)
-    ctx.closePath()
-    ctx.fill()
-  }
-  // Stalagmites rising from the bottom pipe (triangles pointing up)
-  for (let i = 0; i < spikes; i++) {
-    const sx = x + i * spikeW
-    const tipLen = 6 + rnd(i + 5) * 14
-    ctx.beginPath()
-    ctx.moveTo(sx, gapBot + 8)
-    ctx.lineTo(sx + spikeW, gapBot + 8)
-    ctx.lineTo(sx + spikeW / 2, gapBot - tipLen + 2)
-    ctx.closePath()
-    ctx.fill()
-  }
-  // Highlight strokes on spike edges
-  ctx.strokeStyle = 'rgba(201,122,74,0.4)'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  for (let i = 0; i < spikes; i++) {
-    const sx = x + i * spikeW
-    ctx.moveTo(sx + spikeW / 2, gapTop - 8)
-    ctx.lineTo(sx + spikeW / 2, gapTop + (6 + rnd(i) * 14) - 4)
-    ctx.moveTo(sx + spikeW / 2, gapBot + 8)
-    ctx.lineTo(sx + spikeW / 2, gapBot - (6 + rnd(i + 5) * 14) + 4)
-  }
-  ctx.stroke()
-}
+        const bx = x + c * (PIPE_W / cols) + (rnd(i + 1) - 0.5) * 4
+        const jitterY = (rnd(i + 2) - 0.5) * 3
+        const size = blockSize - rnd(i + 3) * 4
+        const left = bx
+        const top = by + jitterY
 
-function drawRoots(ctx, x, gapTop, gapBot, rnd, biome) {
-  // Dark dirt background
-  fillPipeColumn(ctx, x, 0, PIPE_W, gapTop, '#3a2515', '#1a0e05')
-  fillPipeColumn(ctx, x, gapBot, PIPE_W, BOARD_H - gapBot, '#3a2515', '#1a0e05')
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.fillRect(left + 2, top + 2, size, size)
+        // Block face
+        ctx.fillStyle = '#6b4529'
+        ctx.fillRect(left, top, size, size)
+        // Inner bevel light (top + left)
+        ctx.fillStyle = 'rgba(230,180,140,0.45)'
+        ctx.fillRect(left, top, size, 3)
+        ctx.fillRect(left, top, 3, size)
+        // Inner bevel dark (bottom + right)
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'
+        ctx.fillRect(left, top + size - 3, size, 3)
+        ctx.fillRect(left + size - 3, top, 3, size)
+        // Ore fleck
+        ctx.fillStyle = 'rgba(201,122,74,0.55)'
+        ctx.fillRect(left + size * 0.4, top + size * 0.4, 3, 3)
 
-  // Thick root bundle ending at the gap edge with sinuous curves
-  ctx.strokeStyle = '#4a321c'
-  ctx.lineWidth = 6
-  ctx.lineCap = 'round'
-  // Top pipe roots descending toward gap
-  ctx.beginPath()
-  for (let i = 0; i < 3; i++) {
-    const startX = x + (0.2 + 0.3 * i) * PIPE_W
-    const cpX = startX + (rnd(i) - 0.5) * 30
-    const endX = startX + (rnd(i + 3) - 0.5) * 20
-    ctx.moveTo(startX, 0)
-    ctx.quadraticCurveTo(cpX, gapTop * 0.6, endX, gapTop)
+        i++
+      }
+      i += 7
+    }
   }
-  ctx.stroke()
-  // Bottom pipe roots ascending from floor
-  ctx.beginPath()
-  for (let i = 0; i < 3; i++) {
-    const startX = x + (0.2 + 0.3 * i) * PIPE_W
-    const cpX = startX + (rnd(i + 10) - 0.5) * 30
-    const endX = startX + (rnd(i + 13) - 0.5) * 20
-    ctx.moveTo(startX, BOARD_H)
-    ctx.quadraticCurveTo(cpX, gapBot + (BOARD_H - gapBot) * 0.4, endX, gapBot)
-  }
-  ctx.stroke()
-
-  // Thinner secondary roots (lighter)
-  ctx.strokeStyle = '#7a4a26'
-  ctx.lineWidth = 2
-  ctx.beginPath()
-  for (let i = 0; i < 4; i++) {
-    const sx = x + rnd(i + 20) * PIPE_W
-    const midY = gapTop * (0.3 + rnd(i + 25) * 0.5)
-    ctx.moveTo(sx, midY)
-    ctx.lineTo(sx + (rnd(i + 30) - 0.5) * 20, midY + 12)
-  }
-  for (let i = 0; i < 4; i++) {
-    const sx = x + rnd(i + 40) * PIPE_W
-    const midY = gapBot + (BOARD_H - gapBot) * (0.3 + rnd(i + 45) * 0.5)
-    ctx.moveTo(sx, midY)
-    ctx.lineTo(sx + (rnd(i + 50) - 0.5) * 20, midY - 12)
-  }
-  ctx.stroke()
+  drawStack(-8, gapTop + 4, 0)
+  drawStack(gapBot - 4, BOARD_H + 8, 1000)
 }
 
 
@@ -585,12 +567,12 @@ export default function FlappyMole() {
         return x - Math.floor(x)
       }
 
-      if (p.type === 'stalactites') {
-        drawStalactites(ctx, screenX, gapTop, gapBot, rnd, b)
-      } else if (p.type === 'roots') {
-        drawRoots(ctx, screenX, gapTop, gapBot, rnd, b)
+      if (p.type === 'crystals') {
+        drawCrystals(ctx, screenX, gapTop, gapBot, rnd, b)
+      } else if (p.type === 'blocks') {
+        drawBlocks(ctx, screenX, gapTop, gapBot, rnd, b)
       } else {
-        drawRocks(ctx, screenX, gapTop, gapBot, rnd, b)
+        drawBoulders(ctx, screenX, gapTop, gapBot, rnd, b)
       }
     }
 
