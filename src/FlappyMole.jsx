@@ -27,7 +27,6 @@ const GAP_MARGIN = 60
 const PX_PER_METER = 10
 const DEBUG_HITBOX = false
 
-const PIPE_TYPES = ['boulders', 'crystals', 'blocks']
 
 function scrollSpeed(distance) {
   const t = Math.min(1, distance / 12000)
@@ -89,117 +88,6 @@ function drawBoulders(ctx, x, gapTop, gapBot, rnd, biome) {
   drawPile(-8, gapTop + 4, 0)
   drawPile(gapBot - 4, BOARD_H + 8, 100)
 }
-
-function drawCrystals(ctx, x, gapTop, gapBot, rnd, biome) {
-  // Pointed crystal shards — tips at the gap edge, bases at the outer wall
-  // Fills the full collision rect so collision always matches what you see
-  const drawColumn = (outerY, gapEdgeY, seedOffset) => {
-    const dir = Math.sign(gapEdgeY - outerY) // +1 top-pipe (down), -1 bottom-pipe (up)
-    const totalH = Math.abs(gapEdgeY - outerY)
-
-    // Rocky backing band at the outer wall — ensures no visible empty near ceiling/floor
-    const bandH = Math.min(totalH * 0.4, 60)
-    const bandY0 = dir === 1 ? outerY : outerY - bandH
-    const bg = ctx.createLinearGradient(x, bandY0, x, bandY0 + bandH)
-    bg.addColorStop(0, dir === 1 ? '#1a0e05' : '#3a2515')
-    bg.addColorStop(1, dir === 1 ? '#3a2515' : '#1a0e05')
-    ctx.fillStyle = bg
-    ctx.fillRect(x - 2, bandY0, PIPE_W + 4, bandH)
-
-    // Shards from the band down/up to the gap, varied lengths but all reaching close to gap
-    const shardCount = 7
-    const shardBaseY = dir === 1 ? outerY + bandH * 0.6 : outerY - bandH * 0.6
-    const shardReach = totalH - bandH * 0.6
-    for (let i = 0; i < shardCount; i++) {
-      const cx = x + (i + 0.5) * (PIPE_W / shardCount) + (rnd(i + seedOffset) - 0.5) * 4
-      const halfBase = 7 + rnd(i + seedOffset + 10) * 4
-      // Each shard reaches 85–100% of the way to the gap — guarantees full rect coverage
-      const lengthFrac = 0.85 + rnd(i + seedOffset + 20) * 0.15
-      const length = shardReach * lengthFrac
-      const tipY = shardBaseY + length * dir
-
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.55)'
-      ctx.beginPath()
-      ctx.moveTo(cx - halfBase + 2, shardBaseY + 2)
-      ctx.lineTo(cx + halfBase + 2, shardBaseY + 2)
-      ctx.lineTo(cx + 2, tipY + 2)
-      ctx.closePath()
-      ctx.fill()
-
-      // Crystal body
-      ctx.fillStyle = '#6e4e2a'
-      ctx.beginPath()
-      ctx.moveTo(cx - halfBase, shardBaseY)
-      ctx.lineTo(cx + halfBase, shardBaseY)
-      ctx.lineTo(cx, tipY)
-      ctx.closePath()
-      ctx.fill()
-
-      // Lit facet
-      ctx.fillStyle = 'rgba(230,180,140,0.45)'
-      ctx.beginPath()
-      ctx.moveTo(cx - halfBase, shardBaseY)
-      ctx.lineTo(cx, tipY)
-      ctx.lineTo(cx - 2, shardBaseY)
-      ctx.closePath()
-      ctx.fill()
-    }
-  }
-  drawColumn(0, gapTop, 0)
-  drawColumn(BOARD_H, gapBot, 200)
-}
-
-function drawBlocks(ctx, x, gapTop, gapBot, rnd, biome) {
-  // Mined ore-block stacks — dense grid so every block covers collision
-  const drawStack = (yStart, yEnd, seedOffset) => {
-    // Dirt backing under the blocks so no empty gaps
-    const bg = ctx.createLinearGradient(x, yStart, x, yEnd)
-    bg.addColorStop(0, '#2a1810')
-    bg.addColorStop(1, '#1a0e05')
-    ctx.fillStyle = bg
-    ctx.fillRect(x - 2, yStart, PIPE_W + 4, yEnd - yStart)
-
-    const blockSize = 28
-    const cols = 2
-    let i = seedOffset
-    for (let by = yStart; by < yEnd; by += blockSize - 2) {
-      for (let c = 0; c < cols; c++) {
-        const bx = x + c * (PIPE_W / cols) + (rnd(i + 1) - 0.5) * 3
-        const jitterY = (rnd(i + 2) - 0.5) * 2
-        const size = blockSize - rnd(i + 3) * 2
-        const left = bx
-        const top = by + jitterY
-
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.55)'
-        ctx.fillRect(left + 2, top + 2, size, size)
-        // Block face (color varies a bit per block for an ore-y look)
-        ctx.fillStyle = rnd(i + 4) > 0.7 ? '#7e5530' : '#6b4529'
-        ctx.fillRect(left, top, size, size)
-        // Inner bevel light (top + left)
-        ctx.fillStyle = 'rgba(230,180,140,0.45)'
-        ctx.fillRect(left, top, size, 3)
-        ctx.fillRect(left, top, 3, size)
-        // Inner bevel dark (bottom + right)
-        ctx.fillStyle = 'rgba(0,0,0,0.5)'
-        ctx.fillRect(left, top + size - 3, size, 3)
-        ctx.fillRect(left + size - 3, top, 3, size)
-        // Ore fleck (not on every block)
-        if (rnd(i + 5) > 0.4) {
-          ctx.fillStyle = 'rgba(201,122,74,0.55)'
-          ctx.fillRect(left + size * 0.4, top + size * 0.4, 3, 3)
-        }
-
-        i++
-      }
-      i += 7
-    }
-  }
-  drawStack(-4, gapTop + 2, 0)
-  drawStack(gapBot - 2, BOARD_H + 4, 1000)
-}
-
 
 function decodeJwt(token) {
   try {
@@ -463,8 +351,7 @@ export default function FlappyMole() {
         const gapMin = GAP_MARGIN + gH / 2
         const gapMax = BOARD_H - GAP_MARGIN - gH / 2
         const gapY = gapMin + Math.random() * (gapMax - gapMin)
-        const type = PIPE_TYPES[(s.nextPipeId + Math.floor(Math.random() * 3)) % PIPE_TYPES.length]
-        s.pipes.push({ id: s.nextPipeId++, worldX: s.nextPipeX, gapY, gapH: gH, passed: false, type })
+        s.pipes.push({ id: s.nextPipeId++, worldX: s.nextPipeX, gapY, gapH: gH, passed: false })
         s.nextPipeX += pipeSpacing(s.distance)
       }
 
@@ -590,13 +477,7 @@ export default function FlappyMole() {
         return x - Math.floor(x)
       }
 
-      if (p.type === 'crystals') {
-        drawCrystals(ctx, screenX, gapTop, gapBot, rnd, b)
-      } else if (p.type === 'blocks') {
-        drawBlocks(ctx, screenX, gapTop, gapBot, rnd, b)
-      } else {
-        drawBoulders(ctx, screenX, gapTop, gapBot, rnd, b)
-      }
+      drawBoulders(ctx, screenX, gapTop, gapBot, rnd, b)
     }
 
     // Mole sprite — swap images based on current input (up / down / idle-right)
