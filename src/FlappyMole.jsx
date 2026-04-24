@@ -466,6 +466,8 @@ export default function FlappyMole() {
     if (DEBUG_HITBOX) {
       ctx.save()
       ctx.lineWidth = 1.5
+      ctx.font = '11px monospace'
+
       // Pipe hit rectangles (top + bottom) in lime
       ctx.strokeStyle = '#00ff88'
       for (const p of s.pipes) {
@@ -476,33 +478,61 @@ export default function FlappyMole() {
         ctx.strokeRect(screenX, 0, PIPE_W, gapTop)
         ctx.strokeRect(screenX, gapBot, PIPE_W, BOARD_H - gapBot)
       }
-      // Mole circle hitbox in magenta
+
+      // Mole live hitbox (magenta) with label
+      const liveX = MOLE_SCREEN_X + (s.moleXOffset || 0)
       ctx.strokeStyle = '#ff00ff'
       ctx.beginPath()
-      ctx.arc(MOLE_SCREEN_X + (s.moleXOffset || 0), s.moleY, HITBOX_R, 0, Math.PI * 2)
+      ctx.arc(liveX, s.moleY, HITBOX_R, 0, Math.PI * 2)
       ctx.stroke()
-      // Collision point + impacted pipe rect at the moment of hit (red)
+      ctx.fillStyle = '#ff00ff'
+      ctx.fillText('mole now', liveX + HITBOX_R + 4, s.moleY + 4)
+
+      // Collision moment: frozen mole + impacted pipe (red) + filled overlap to prove contact
       if (s.collision) {
         const c = s.collision
         const colScreenX = c.worldX - s.distance + MOLE_SCREEN_X
         const pipeScreenX = c.pipeWorldX - s.distance + MOLE_SCREEN_X
+
+        // Impacted pipe rect (red, thick)
         ctx.strokeStyle = '#ff3040'
-        ctx.lineWidth = 2
-        // The pipe rect that was impacted
+        ctx.lineWidth = 3
+        ctx.fillStyle = 'rgba(255,48,64,0.18)'
         if (c.hitTop) {
+          ctx.fillRect(pipeScreenX, 0, PIPE_W, c.gapTop)
           ctx.strokeRect(pipeScreenX, 0, PIPE_W, c.gapTop)
         } else {
+          ctx.fillRect(pipeScreenX, c.gapBot, PIPE_W, BOARD_H - c.gapBot)
           ctx.strokeRect(pipeScreenX, c.gapBot, PIPE_W, BOARD_H - c.gapBot)
         }
-        // The mole hitbox circle at collision moment
+
+        // Mole hitbox at collision moment (red, thick, filled)
+        ctx.fillStyle = 'rgba(255,48,64,0.25)'
         ctx.beginPath()
         ctx.arc(colScreenX, c.worldY, HITBOX_R, 0, Math.PI * 2)
+        ctx.fill()
         ctx.stroke()
-        // Crosshair at exact hit center
+
+        // Crosshair at circle center
+        ctx.lineWidth = 2
         ctx.beginPath()
-        ctx.moveTo(colScreenX - 8, c.worldY); ctx.lineTo(colScreenX + 8, c.worldY)
-        ctx.moveTo(colScreenX, c.worldY - 8); ctx.lineTo(colScreenX, c.worldY + 8)
+        ctx.moveTo(colScreenX - 10, c.worldY); ctx.lineTo(colScreenX + 10, c.worldY)
+        ctx.moveTo(colScreenX, c.worldY - 10); ctx.lineTo(colScreenX, c.worldY + 10)
         ctx.stroke()
+
+        // Label
+        ctx.fillStyle = '#ff3040'
+        ctx.fillText('IMPACT', colScreenX + HITBOX_R + 4, c.worldY + 4)
+
+        // Dashed line connecting current mole to collision point
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+        ctx.lineWidth = 1
+        ctx.setLineDash([4, 4])
+        ctx.beginPath()
+        ctx.moveTo(liveX, s.moleY)
+        ctx.lineTo(colScreenX, c.worldY)
+        ctx.stroke()
+        ctx.setLineDash([])
       }
       ctx.restore()
     }
