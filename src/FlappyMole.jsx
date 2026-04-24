@@ -5,9 +5,10 @@ import './FlappyMole.css'
 const BOARD_W = 900
 const BOARD_H = 540
 const MOLE_SIZE = 30
-const HITBOX_W = 28
-const HITBOX_H = 24
+const HITBOX_W = 32
+const HITBOX_H = 28
 const MOLE_SCREEN_X = 180
+const BOUNCE_FRAMES = 28
 
 const SCROLL_SPEED_START = 1.2
 const SCROLL_SPEED_MAX = 3.4
@@ -236,12 +237,33 @@ export default function FlappyMole() {
       nextPipeId: 1,
       dead: false,
       flash: 0,
+      bounceFrames: 0,
+      bounceVx: 0,
+      bounceVy: 0,
+      moleXOffset: 0,
     }
     setDepth(0)
 
     const tick = () => {
       const s = stateRef.current
       const i = inputRef.current
+
+      // Bounce-back animation after a collision, then end the game
+      if (s.bounceFrames > 0) {
+        s.bounceFrames -= 1
+        s.moleXOffset += s.bounceVx
+        s.moleY += s.bounceVy
+        s.bounceVx *= 0.9
+        s.bounceVy *= 0.85
+        s.bounceVy += 0.4 // gravity while bouncing
+        render(ctx, s)
+        if (s.bounceFrames <= 0) {
+          fnRef.current.triggerGameOver()
+          return
+        }
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
 
       // Scroll world
       const speed = scrollSpeed(s.distance)
@@ -288,7 +310,11 @@ export default function FlappyMole() {
         const gapBot = p.gapY + p.gapH / 2
         if (moleT < gapTop || moleB > gapBot) {
           s.dead = true
-          s.flash = 8
+          s.flash = 14
+          s.bounceFrames = BOUNCE_FRAMES
+          s.bounceVx = -6
+          // Knock the mole toward the nearest open space (away from the pipe it hit)
+          s.bounceVy = (moleT < gapTop) ? 5 : -5
           fnRef.current.playCrash?.()
           break
         }
@@ -298,10 +324,6 @@ export default function FlappyMole() {
 
       render(ctx, s)
 
-      if (s.dead) {
-        fnRef.current.triggerGameOver()
-        return
-      }
       rafRef.current = requestAnimationFrame(tick)
     }
 
@@ -383,8 +405,10 @@ export default function FlappyMole() {
 
     // Mole (facing right, tilted by vy)
     ctx.save()
-    ctx.translate(MOLE_SCREEN_X, s.moleY)
-    const tilt = clamp(s.vy / VY_MAX, -1, 1) * 0.45
+    ctx.translate(MOLE_SCREEN_X + (s.moleXOffset || 0), s.moleY)
+    const tilt = s.bounceFrames > 0
+      ? (s.bounceFrames * 0.08)
+      : clamp(s.vy / VY_MAX, -1, 1) * 0.45
     ctx.rotate(tilt)
     // Body
     ctx.fillStyle = '#4a2e1a'
