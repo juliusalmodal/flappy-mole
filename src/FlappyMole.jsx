@@ -25,7 +25,9 @@ const GAP_H_MIN = 150
 const GAP_MARGIN = 60
 
 const PX_PER_METER = 10
-const DEBUG_HITBOX = true
+const DEBUG_HITBOX = false
+
+const PIPE_TYPES = ['rocks', 'stalactites', 'roots']
 
 function scrollSpeed(distance) {
   const t = Math.min(1, distance / 12000)
@@ -41,6 +43,158 @@ function pipeSpacing(distance) {
 }
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
+
+// === Obstacle drawing helpers ===
+function fillPipeColumn(ctx, x, y, w, h, lightColor, darkColor) {
+  const g = ctx.createLinearGradient(x, 0, x + w, 0)
+  g.addColorStop(0, darkColor)
+  g.addColorStop(0.5, lightColor)
+  g.addColorStop(1, darkColor)
+  ctx.fillStyle = g
+  ctx.fillRect(x, y, w, h)
+}
+
+function drawRocks(ctx, x, gapTop, gapBot, rnd, biome) {
+  // Rough, jagged dirt walls with rocky silhouette along the gap edge
+  fillPipeColumn(ctx, x, 0, PIPE_W, gapTop, '#7a5032', '#2f1d11')
+  fillPipeColumn(ctx, x, gapBot, PIPE_W, BOARD_H - gapBot, '#7a5032', '#2f1d11')
+
+  // Jagged rim on the bottom of top pipe
+  const segments = 7
+  const stepX = PIPE_W / segments
+  ctx.fillStyle = '#4a2d17'
+  ctx.beginPath()
+  ctx.moveTo(x, gapTop)
+  for (let i = 0; i <= segments; i++) {
+    const px = x + i * stepX
+    const py = gapTop - 4 + rnd(i) * 10
+    ctx.lineTo(px, py)
+  }
+  ctx.lineTo(x + PIPE_W, gapTop - 12)
+  ctx.lineTo(x, gapTop - 12)
+  ctx.closePath()
+  ctx.fill()
+
+  // Jagged rim on the top of bottom pipe
+  ctx.beginPath()
+  ctx.moveTo(x, gapBot)
+  for (let i = 0; i <= segments; i++) {
+    const px = x + i * stepX
+    const py = gapBot + 4 - rnd(i + 10) * 10
+    ctx.lineTo(px, py)
+  }
+  ctx.lineTo(x + PIPE_W, gapBot + 12)
+  ctx.lineTo(x, gapBot + 12)
+  ctx.closePath()
+  ctx.fill()
+
+  // Small rock dots inside
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'
+  for (let i = 0; i < 5; i++) {
+    const rx = x + rnd(i + 20) * PIPE_W
+    const ry = rnd(i + 30) * gapTop
+    ctx.fillRect(rx, ry, 2, 2)
+  }
+  for (let i = 0; i < 5; i++) {
+    const rx = x + rnd(i + 40) * PIPE_W
+    const ry = gapBot + rnd(i + 50) * (BOARD_H - gapBot)
+    ctx.fillRect(rx, ry, 2, 2)
+  }
+}
+
+function drawStalactites(ctx, x, gapTop, gapBot, rnd, biome) {
+  // Dark rocky background columns
+  fillPipeColumn(ctx, x, 0, PIPE_W, gapTop - 8, '#4f3a28', '#1f130a')
+  fillPipeColumn(ctx, x, gapBot + 8, PIPE_W, BOARD_H - gapBot - 8, '#4f3a28', '#1f130a')
+
+  // Stalactites hanging from the top pipe (triangles pointing down)
+  const spikes = 4
+  const spikeW = PIPE_W / spikes
+  ctx.fillStyle = '#6b4a2d'
+  for (let i = 0; i < spikes; i++) {
+    const sx = x + i * spikeW
+    const tipLen = 6 + rnd(i) * 14
+    ctx.beginPath()
+    ctx.moveTo(sx, gapTop - 8)
+    ctx.lineTo(sx + spikeW, gapTop - 8)
+    ctx.lineTo(sx + spikeW / 2, gapTop + tipLen - 2)
+    ctx.closePath()
+    ctx.fill()
+  }
+  // Stalagmites rising from the bottom pipe (triangles pointing up)
+  for (let i = 0; i < spikes; i++) {
+    const sx = x + i * spikeW
+    const tipLen = 6 + rnd(i + 5) * 14
+    ctx.beginPath()
+    ctx.moveTo(sx, gapBot + 8)
+    ctx.lineTo(sx + spikeW, gapBot + 8)
+    ctx.lineTo(sx + spikeW / 2, gapBot - tipLen + 2)
+    ctx.closePath()
+    ctx.fill()
+  }
+  // Highlight strokes on spike edges
+  ctx.strokeStyle = 'rgba(201,122,74,0.4)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  for (let i = 0; i < spikes; i++) {
+    const sx = x + i * spikeW
+    ctx.moveTo(sx + spikeW / 2, gapTop - 8)
+    ctx.lineTo(sx + spikeW / 2, gapTop + (6 + rnd(i) * 14) - 4)
+    ctx.moveTo(sx + spikeW / 2, gapBot + 8)
+    ctx.lineTo(sx + spikeW / 2, gapBot - (6 + rnd(i + 5) * 14) + 4)
+  }
+  ctx.stroke()
+}
+
+function drawRoots(ctx, x, gapTop, gapBot, rnd, biome) {
+  // Dark dirt background
+  fillPipeColumn(ctx, x, 0, PIPE_W, gapTop, '#3a2515', '#1a0e05')
+  fillPipeColumn(ctx, x, gapBot, PIPE_W, BOARD_H - gapBot, '#3a2515', '#1a0e05')
+
+  // Thick root bundle ending at the gap edge with sinuous curves
+  ctx.strokeStyle = '#4a321c'
+  ctx.lineWidth = 6
+  ctx.lineCap = 'round'
+  // Top pipe roots descending toward gap
+  ctx.beginPath()
+  for (let i = 0; i < 3; i++) {
+    const startX = x + (0.2 + 0.3 * i) * PIPE_W
+    const cpX = startX + (rnd(i) - 0.5) * 30
+    const endX = startX + (rnd(i + 3) - 0.5) * 20
+    ctx.moveTo(startX, 0)
+    ctx.quadraticCurveTo(cpX, gapTop * 0.6, endX, gapTop)
+  }
+  ctx.stroke()
+  // Bottom pipe roots ascending from floor
+  ctx.beginPath()
+  for (let i = 0; i < 3; i++) {
+    const startX = x + (0.2 + 0.3 * i) * PIPE_W
+    const cpX = startX + (rnd(i + 10) - 0.5) * 30
+    const endX = startX + (rnd(i + 13) - 0.5) * 20
+    ctx.moveTo(startX, BOARD_H)
+    ctx.quadraticCurveTo(cpX, gapBot + (BOARD_H - gapBot) * 0.4, endX, gapBot)
+  }
+  ctx.stroke()
+
+  // Thinner secondary roots (lighter)
+  ctx.strokeStyle = '#7a4a26'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  for (let i = 0; i < 4; i++) {
+    const sx = x + rnd(i + 20) * PIPE_W
+    const midY = gapTop * (0.3 + rnd(i + 25) * 0.5)
+    ctx.moveTo(sx, midY)
+    ctx.lineTo(sx + (rnd(i + 30) - 0.5) * 20, midY + 12)
+  }
+  for (let i = 0; i < 4; i++) {
+    const sx = x + rnd(i + 40) * PIPE_W
+    const midY = gapBot + (BOARD_H - gapBot) * (0.3 + rnd(i + 45) * 0.5)
+    ctx.moveTo(sx, midY)
+    ctx.lineTo(sx + (rnd(i + 50) - 0.5) * 20, midY - 12)
+  }
+  ctx.stroke()
+}
+
 
 function decodeJwt(token) {
   try {
@@ -286,7 +440,8 @@ export default function FlappyMole() {
         const gapMin = GAP_MARGIN + gH / 2
         const gapMax = BOARD_H - GAP_MARGIN - gH / 2
         const gapY = gapMin + Math.random() * (gapMax - gapMin)
-        s.pipes.push({ id: s.nextPipeId++, worldX: s.nextPipeX, gapY, gapH: gH, passed: false })
+        const type = PIPE_TYPES[(s.nextPipeId + Math.floor(Math.random() * 3)) % PIPE_TYPES.length]
+        s.pipes.push({ id: s.nextPipeId++, worldX: s.nextPipeX, gapY, gapH: gH, passed: false, type })
         s.nextPipeX += pipeSpacing(s.distance)
       }
 
@@ -399,28 +554,26 @@ export default function FlappyMole() {
     ctx.fillStyle = rockGradBot
     ctx.fillRect(0, BOARD_H - bandH, BOARD_W, bandH)
 
-    // Pipes (top + bottom columns with a gap)
+    // Obstacles — varied underground shapes (collision stays rect-based, visuals differ per type)
     for (const p of s.pipes) {
       const screenX = p.worldX - s.distance
-      if (screenX < -PIPE_W || screenX > BOARD_W) continue
+      if (screenX < -PIPE_W - 30 || screenX > BOARD_W + 30) continue
       const gapTop = p.gapY - p.gapH / 2
       const gapBot = p.gapY + p.gapH / 2
 
-      const grad = ctx.createLinearGradient(screenX, 0, screenX + PIPE_W, 0)
-      grad.addColorStop(0, '#2f1d11')
-      grad.addColorStop(0.5, '#6b4529')
-      grad.addColorStop(1, '#2f1d11')
-      ctx.fillStyle = grad
-      ctx.fillRect(screenX, 0, PIPE_W, gapTop)
-      ctx.fillRect(screenX, gapBot, PIPE_W, BOARD_H - gapBot)
+      // Deterministic per-pipe pseudo-random (so shapes don't flicker)
+      const rnd = (n) => {
+        const x = Math.sin(p.id * 9301 + n * 7.3) * 43758.5453
+        return x - Math.floor(x)
+      }
 
-      // Rim / edge highlights around the gap
-      ctx.fillStyle = 'rgba(201,122,74,0.55)'
-      ctx.fillRect(screenX - 2, gapTop - 6, PIPE_W + 4, 6)
-      ctx.fillRect(screenX - 2, gapBot, PIPE_W + 4, 6)
-      ctx.fillStyle = 'rgba(0,0,0,0.35)'
-      ctx.fillRect(screenX, gapTop - 2, PIPE_W, 2)
-      ctx.fillRect(screenX, gapBot, PIPE_W, 2)
+      if (p.type === 'stalactites') {
+        drawStalactites(ctx, screenX, gapTop, gapBot, rnd, b)
+      } else if (p.type === 'roots') {
+        drawRoots(ctx, screenX, gapTop, gapBot, rnd, b)
+      } else {
+        drawRocks(ctx, screenX, gapTop, gapBot, rnd, b)
+      }
     }
 
     // Mole (facing right, tilted by vy)
