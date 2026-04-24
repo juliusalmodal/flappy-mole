@@ -5,7 +5,8 @@ import './FlappyMole.css'
 const BOARD_W = 900
 const BOARD_H = 540
 const MOLE_SIZE = 30
-const MOLE_HITBOX = 20
+const HITBOX_W = 28
+const HITBOX_H = 24
 const MOLE_SCREEN_X = 180
 
 const SCROLL_SPEED_START = 1.2
@@ -269,14 +270,14 @@ export default function FlappyMole() {
       // Cull pipes that scrolled off screen left
       s.pipes = s.pipes.filter(p => (p.worldX - s.distance + MOLE_SCREEN_X) > -PIPE_W - 10)
 
-      // Collision + pass-detection (hitbox is smaller than the drawn mole for forgiving play)
+      // Collision + pass-detection (hitbox slightly smaller than visible body for fair play)
       const moleWorldX = s.distance + MOLE_SCREEN_X
-      const moleL = moleWorldX - MOLE_HITBOX / 2
-      const moleR = moleWorldX + MOLE_HITBOX / 2
-      const moleT = s.moleY - MOLE_HITBOX / 2
-      const moleB = s.moleY + MOLE_HITBOX / 2
+      const moleL = moleWorldX - HITBOX_W / 2
+      const moleR = moleWorldX + HITBOX_W / 2
+      const moleT = s.moleY - HITBOX_H / 2
+      const moleB = s.moleY + HITBOX_H / 2
       for (const p of s.pipes) {
-        if (!p.passed && p.worldX + PIPE_W < moleWorldX - MOLE_HITBOX / 2) {
+        if (!p.passed && p.worldX + PIPE_W < moleWorldX - HITBOX_W / 2) {
           p.passed = true
           fnRef.current.playPass?.()
         }
