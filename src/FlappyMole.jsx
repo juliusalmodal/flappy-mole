@@ -237,9 +237,9 @@ export default function FlappyMole() {
       img.src = src
     })
     Promise.all([
-      load('/mole_moves/mole_right.png'),
-      load('/mole_moves/mole_up.png'),
-      load('/mole_moves/mole_down.png'),
+      load('/mole_moves/mole_right.jpg'),
+      load('/mole_moves/mole_up.jpg'),
+      load('/mole_moves/mole_down.jpg'),
     ]).then(([right, up, down]) => {
       moleImagesRef.current = { right, up, down }
     })

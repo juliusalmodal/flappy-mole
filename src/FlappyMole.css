@@ -41,17 +41,15 @@
   margin-top: 3.2rem;
 }
 .fm-heading {
-  font-family: var(--font-display);
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(1.2rem, 3.5vw, 2.4rem);
   font-weight: 400;
-  font-size: clamp(3rem, 9vw, 5rem);
-  line-height: 1.05;
-  letter-spacing: -0.01em;
-  margin-bottom: 1rem;
+  line-height: 1.4;
+  margin-bottom: 1.2rem;
+  text-shadow: 0 0 8px var(--accent), 0 0 20px rgba(201,122,74,0.5);
+  animation: arcade-flicker 4s infinite;
 }
-.fm-heading em {
-  color: var(--accent);
-  font-style: italic;
-}
+.fm-heading em { font-style: normal; color: var(--accent); }
 .fm-sub {
   font-size: 0.96rem;
   color: var(--ink-soft);
@@ -251,18 +249,18 @@
 }
 
 .fm-countdown-num {
-  font-family: var(--font-display);
-  font-size: 8rem;
-  font-weight: 400;
-  font-style: italic;
-  color: var(--accent);
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(4rem, 14vw, 9rem);
+  color: #fff;
   line-height: 1;
-  animation: fm-pulse 0.65s ease-out;
+  text-shadow: 0 0 20px var(--accent), 0 0 50px rgba(201,122,74,0.6);
+  animation: fm-count-pop 0.95s ease-out forwards;
 }
-@keyframes fm-pulse {
-  0%   { transform: scale(0.4); opacity: 0; }
-  40%  { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+@keyframes fm-count-pop {
+  0%   { transform: scale(1.8); opacity: 0; }
+  20%  { transform: scale(1);   opacity: 1; }
+  75%  { transform: scale(1);   opacity: 1; }
+  100% { transform: scale(0.7); opacity: 0; }
 }
 
 .fm-over-content { text-align: center; padding: 1rem; }
