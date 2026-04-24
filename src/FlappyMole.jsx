@@ -203,10 +203,19 @@ export default function FlappyMole() {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
-    const dpr = Math.max(1, window.devicePixelRatio || 1)
-    canvas.width = BOARD_W * dpr
-    canvas.height = BOARD_H * dpr
-    ctx.scale(dpr, dpr)
+
+    const resizeCanvas = () => {
+      const dpr = Math.max(1, window.devicePixelRatio || 1)
+      const cssW = canvas.clientWidth || BOARD_W
+      const cssH = canvas.clientHeight || BOARD_H
+      canvas.width = Math.round(cssW * dpr)
+      canvas.height = Math.round(cssH * dpr)
+      // Map logical 400x640 coords to actual canvas pixel size
+      ctx.setTransform((cssW * dpr) / BOARD_W, 0, 0, (cssH * dpr) / BOARD_H, 0, 0)
+    }
+    resizeCanvas()
+    const ro = new ResizeObserver(resizeCanvas)
+    ro.observe(canvas)
 
     stateRef.current = {
       worldY: 0,
@@ -287,7 +296,10 @@ export default function FlappyMole() {
     }
 
     rafRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafRef.current)
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      ro.disconnect()
+    }
   }, [phase])
 
   const render = (ctx, s) => {
@@ -533,8 +545,9 @@ export default function FlappyMole() {
     setPhase('gate')
   }
 
+  const inGame = phase === 'countdown' || phase === 'playing' || phase === 'gameover'
   return (
-    <div className="fm-page">
+    <div className={`fm-page ${inGame ? 'fm-page-playing' : ''}`}>
       <a href="https://jeules.net" className="fm-back">← Back to site</a>
 
       {phase === 'gate' && (
