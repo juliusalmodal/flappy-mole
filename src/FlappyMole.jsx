@@ -7,8 +7,8 @@ const BOARD_H = 540
 const MOLE_SIZE = 30
 const MOLE_SCREEN_X = 180
 
-const SCROLL_SPEED_START = 2.6
-const SCROLL_SPEED_MAX = 5.4
+const SCROLL_SPEED_START = 1.6
+const SCROLL_SPEED_MAX = 4.2
 
 const VY_MAX = 4.6
 const VY_ACCEL = 0.42
@@ -24,7 +24,7 @@ const GAP_MARGIN = 60
 const PX_PER_METER = 10
 
 function scrollSpeed(distance) {
-  const t = Math.min(1, distance / 6000)
+  const t = Math.min(1, distance / 9000)
   return SCROLL_SPEED_START + (SCROLL_SPEED_MAX - SCROLL_SPEED_START) * t
 }
 function gapHeight(distance) {
@@ -640,7 +640,6 @@ export default function FlappyMole() {
               <canvas
                 ref={canvasRef}
                 className="fm-canvas"
-                style={{ width: BOARD_W, height: BOARD_H }}
               />
 
               {phase === 'countdown' && (
