@@ -245,10 +245,15 @@ export default function FlappyMole() {
       else if (i.down && !i.up) s.vy += VY_ACCEL
       else                      s.vy *= VY_DECAY
       s.vy = clamp(s.vy, -VY_MAX, VY_MAX)
-      s.moleY = clamp(s.moleY + s.vy, MOLE_SIZE / 2, BOARD_H - MOLE_SIZE / 2)
-      // Kill velocity when clamped against bounds
-      if (s.moleY <= MOLE_SIZE / 2 && s.vy < 0) s.vy = 0
-      if (s.moleY >= BOARD_H - MOLE_SIZE / 2 && s.vy > 0) s.vy = 0
+      s.moleY += s.vy
+
+      // Hitting ceiling or floor = game over
+      if (s.moleY - MOLE_SIZE / 2 <= 0 || s.moleY + MOLE_SIZE / 2 >= BOARD_H) {
+        s.moleY = clamp(s.moleY, MOLE_SIZE / 2, BOARD_H - MOLE_SIZE / 2)
+        s.dead = true
+        s.flash = 8
+        fnRef.current.playCrash?.()
+      }
 
       // Spawn new pipe pair when the frontier isn't far enough ahead
       while (s.nextPipeX - s.distance < BOARD_W + PIPE_SPACING) {
