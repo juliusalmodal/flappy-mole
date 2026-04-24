@@ -25,6 +25,7 @@ const GAP_H_MIN = 150
 const GAP_MARGIN = 60
 
 const PX_PER_METER = 10
+const DEBUG_HITBOX = true
 
 function scrollSpeed(distance) {
   const t = Math.min(1, distance / 12000)
@@ -451,6 +452,27 @@ export default function FlappyMole() {
       ctx.fillStyle = `rgba(255,60,40,${s.flash / 10})`
       ctx.fillRect(0, 0, BOARD_W, BOARD_H)
       s.flash -= 1
+    }
+
+    if (DEBUG_HITBOX) {
+      ctx.save()
+      ctx.lineWidth = 1.5
+      // Pipe hit rectangles (top + bottom) in lime
+      ctx.strokeStyle = '#00ff88'
+      for (const p of s.pipes) {
+        const screenX = p.worldX - s.distance + MOLE_SCREEN_X
+        if (screenX < -PIPE_W || screenX > BOARD_W) continue
+        const gapTop = p.gapY - p.gapH / 2
+        const gapBot = p.gapY + p.gapH / 2
+        ctx.strokeRect(screenX, 0, PIPE_W, gapTop)
+        ctx.strokeRect(screenX, gapBot, PIPE_W, BOARD_H - gapBot)
+      }
+      // Mole circle hitbox in magenta
+      ctx.strokeStyle = '#ff00ff'
+      ctx.beginPath()
+      ctx.arc(MOLE_SCREEN_X + (s.moleXOffset || 0), s.moleY, HITBOX_R, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
     }
   }
 
