@@ -5,7 +5,7 @@ import './FlappyMole.css'
 const BOARD_W = 900
 const BOARD_H = 540
 const MOLE_SIZE = 30
-const HITBOX_R = 13
+const HITBOX_R = 10
 const MOLE_SCREEN_X = 180
 const BOUNCE_FRAMES = 28
 
@@ -487,6 +487,12 @@ export default function FlappyMole() {
       ctx.stroke()
       ctx.fillStyle = '#ff00ff'
       ctx.fillText('mole now', liveX + HITBOX_R + 4, s.moleY + 4)
+
+      // Drawn body ellipse outline (cyan) = what the sprite actually covers visually
+      ctx.strokeStyle = '#00ffff'
+      ctx.beginPath()
+      ctx.ellipse(liveX, s.moleY, MOLE_SIZE / 2 * 1.15, MOLE_SIZE / 2, 0, 0, Math.PI * 2)
+      ctx.stroke()
 
       // Collision moment: frozen mole + impacted pipe (red) + filled overlap to prove contact
       if (s.collision) {
