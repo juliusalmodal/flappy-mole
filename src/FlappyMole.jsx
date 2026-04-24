@@ -303,6 +303,24 @@ export default function FlappyMole() {
   const userRef = useRef(null)
   const audioCtxRef = useRef(null)
   const fnRef = useRef({})
+  const moleImagesRef = useRef(null)
+
+  // Preload mole sprites
+  useEffect(() => {
+    const load = (src) => new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => resolve(null)
+      img.src = src
+    })
+    Promise.all([
+      load('/mole_moves/mole_right.png'),
+      load('/mole_moves/mole_up.png'),
+      load('/mole_moves/mole_down.png'),
+    ]).then(([right, up, down]) => {
+      moleImagesRef.current = { right, up, down }
+    })
+  }, [])
 
   // Google Identity Services
   useEffect(() => {
@@ -576,38 +594,33 @@ export default function FlappyMole() {
       }
     }
 
-    // Mole (facing right, tilted by vy)
+    // Mole sprite — swap images based on current input (up / down / idle-right)
     ctx.save()
     ctx.translate(MOLE_SCREEN_X + (s.moleXOffset || 0), s.moleY)
-    const tilt = s.bounceFrames > 0
-      ? (s.bounceFrames * 0.08)
-      : clamp(s.vy / VY_MAX, -1, 1) * 0.45
-    ctx.rotate(tilt)
-    // Body
-    ctx.fillStyle = '#4a2e1a'
-    ctx.beginPath()
-    ctx.ellipse(0, 0, MOLE_SIZE / 2 * 1.15, MOLE_SIZE / 2, 0, 0, Math.PI * 2)
-    ctx.fill()
-    // Belly
-    ctx.fillStyle = '#d9b38a'
-    ctx.beginPath()
-    ctx.ellipse(-3, 2, MOLE_SIZE / 2 * 0.7, MOLE_SIZE / 2 * 0.55, 0, 0, Math.PI * 2)
-    ctx.fill()
-    // Snout (front-facing right)
-    ctx.fillStyle = '#f0a070'
-    ctx.beginPath()
-    ctx.ellipse(MOLE_SIZE / 2 * 0.95, 1, 4, 3.2, 0, 0, Math.PI * 2)
-    ctx.fill()
-    // Eye
-    ctx.fillStyle = '#111'
-    ctx.fillRect(4, -5, 2, 2)
-    // Claws (front paws reaching right)
-    ctx.strokeStyle = '#e8d2b0'
-    ctx.lineWidth = 1.4
-    ctx.beginPath()
-    ctx.moveTo(10, 6);  ctx.lineTo(14, 7)
-    ctx.moveTo(10, 9);  ctx.lineTo(14, 11)
-    ctx.stroke()
+    // Only rotate during the bounce tumble; directional images handle orientation in normal play
+    if (s.bounceFrames > 0) ctx.rotate(s.bounceFrames * 0.08)
+
+    const input = inputRef.current
+    const imgs = moleImagesRef.current
+    let moleImg = imgs?.right
+    if (input?.up)       moleImg = imgs?.up   || moleImg
+    else if (input?.down) moleImg = imgs?.down || moleImg
+
+    const drawSize = MOLE_SIZE * 1.6 // visual size of the sprite
+    if (moleImg) {
+      const iw = moleImg.naturalWidth || drawSize
+      const ih = moleImg.naturalHeight || drawSize
+      const scale = drawSize / Math.max(iw, ih)
+      const w = iw * scale
+      const h = ih * scale
+      ctx.drawImage(moleImg, -w / 2, -h / 2, w, h)
+    } else {
+      // Fallback if images didn't load yet
+      ctx.fillStyle = '#4a2e1a'
+      ctx.beginPath()
+      ctx.ellipse(0, 0, MOLE_SIZE / 2, MOLE_SIZE / 2, 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
     ctx.restore()
 
     if (s.flash > 0) {
