@@ -361,18 +361,25 @@ export default function FlappyMole() {
     soil.height = BOARD_H
     soilCanvasRef.current = soil
 
-    const tick = () => {
+    let lastTime = 0
+    const tick = (now) => {
       const s = stateRef.current
       const i = inputRef.current
 
+      // Delta-time scaling so physics run at the same speed regardless of monitor refresh rate.
+      // dt is in "60fps frames" — dt=1 at 60Hz, dt≈0.5 at 120Hz, dt≈0.42 at 144Hz.
+      // Clamp to avoid huge jumps after tab-blur.
+      const dt = lastTime ? Math.min(3, (now - lastTime) / (1000 / 60)) : 1
+      lastTime = now
+
       // Bounce-back animation after a collision, then end the game
       if (s.bounceFrames > 0) {
-        s.bounceFrames -= 1
-        s.moleXOffset += s.bounceVx
-        s.moleY += s.bounceVy
-        s.bounceVx *= 0.9
-        s.bounceVy *= 0.85
-        s.bounceVy += 0.4 // gravity while bouncing
+        s.bounceFrames -= dt
+        s.moleXOffset += s.bounceVx * dt
+        s.moleY += s.bounceVy * dt
+        s.bounceVx *= Math.pow(0.9, dt)
+        s.bounceVy *= Math.pow(0.85, dt)
+        s.bounceVy += 0.4 * dt // gravity while bouncing
         render(ctx, s)
         if (s.bounceFrames <= 0) {
           fnRef.current.triggerGameOver()
@@ -384,14 +391,14 @@ export default function FlappyMole() {
 
       // Scroll world
       const speed = scrollSpeed(s.distance)
-      s.distance += speed
+      s.distance += speed * dt
 
       // Vertical physics — direct velocity control (flappy-style but with both directions)
-      if (i.up && !i.down)      s.vy -= VY_ACCEL
-      else if (i.down && !i.up) s.vy += VY_ACCEL
-      else                      s.vy *= VY_DECAY
+      if (i.up && !i.down)      s.vy -= VY_ACCEL * dt
+      else if (i.down && !i.up) s.vy += VY_ACCEL * dt
+      else                      s.vy *= Math.pow(VY_DECAY, dt)
       s.vy = clamp(s.vy, -VY_MAX, VY_MAX)
-      s.moleY = clamp(s.moleY + s.vy, MOLE_SIZE / 2, BOARD_H - MOLE_SIZE / 2)
+      s.moleY = clamp(s.moleY + s.vy * dt, MOLE_SIZE / 2, BOARD_H - MOLE_SIZE / 2)
       // Kill velocity when pressing against bounds
       if (s.moleY <= MOLE_SIZE / 2 && s.vy < 0) s.vy = 0
       if (s.moleY >= BOARD_H - MOLE_SIZE / 2 && s.vy > 0) s.vy = 0
