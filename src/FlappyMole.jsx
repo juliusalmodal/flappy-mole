@@ -9,8 +9,13 @@ const HITBOX_R = 10
 const MOLE_SCREEN_X = 180
 const BOUNCE_FRAMES = 28
 
-const SCROLL_SPEED_START = 1.2
-const SCROLL_SPEED_MAX = 3.4
+const SCROLL_SPEED_START = 1.5
+const SCROLL_SPEED_MAX = 4.2
+
+// Beyond this depth (in meters), obstacles oscillate vertically
+const MOVING_OBSTACLES_THRESHOLD_M = 2500
+const OBSTACLE_MOVE_AMPLITUDE = 60  // px of vertical sway
+const OBSTACLE_MOVE_FREQUENCY = 0.012 // radians per world-px scrolled
 
 const VY_MAX = 4.6
 const VY_ACCEL = 0.42
@@ -42,6 +47,15 @@ function pipeSpacing(distance) {
 }
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
+
+// Compute the gap-center Y for a pipe, including vertical oscillation if it's a moving obstacle.
+// Bounded so the gap never disappears past the rock bands (12px ceiling/floor).
+function pipeGapY(p, distance) {
+  if (!p.moving) return p.gapY
+  const half = p.gapH / 2 + 30 // keep gap inside playfield with a small margin
+  const swayed = p.gapY + Math.sin(distance * OBSTACLE_MOVE_FREQUENCY + p.phase) * OBSTACLE_MOVE_AMPLITUDE
+  return clamp(swayed, half, 540 /* BOARD_H */ - half)
+}
 
 // === Obstacle drawing helpers ===
 function drawStones(ctx, x, gapTop, gapBot, rnd, biome) {
@@ -388,7 +402,16 @@ export default function FlappyMole() {
         const gapMin = GAP_MARGIN + gH / 2
         const gapMax = BOARD_H - GAP_MARGIN - gH / 2
         const gapY = gapMin + Math.random() * (gapMax - gapMin)
-        s.pipes.push({ id: s.nextPipeId++, worldX: s.nextPipeX, gapY, gapH: gH, passed: false })
+        const moving = (s.nextPipeX / PX_PER_METER) >= MOVING_OBSTACLES_THRESHOLD_M
+        s.pipes.push({
+          id: s.nextPipeId++,
+          worldX: s.nextPipeX,
+          gapY,
+          gapH: gH,
+          passed: false,
+          moving,
+          phase: Math.random() * Math.PI * 2,
+        })
         s.nextPipeX += pipeSpacing(s.distance)
       }
 
@@ -416,8 +439,9 @@ export default function FlappyMole() {
         if (moleCx + HITBOX_R < p.worldX) continue
         if (moleCx - HITBOX_R > p.worldX + PIPE_W) continue
 
-        const gapTop = p.gapY - p.gapH / 2
-        const gapBot = p.gapY + p.gapH / 2
+        const effGapY = pipeGapY(p, s.distance)
+        const gapTop = effGapY - p.gapH / 2
+        const gapBot = effGapY + p.gapH / 2
 
         // Top pipe rect: [p.worldX, 0] → [p.worldX + PIPE_W, gapTop]
         const txc = clamp(moleCx, p.worldX, p.worldX + PIPE_W)
@@ -567,8 +591,9 @@ export default function FlappyMole() {
     for (const p of s.pipes) {
       const screenX = p.worldX - s.distance
       if (screenX < -PIPE_W - 30 || screenX > BOARD_W + 30) continue
-      const gapTop = p.gapY - p.gapH / 2
-      const gapBot = p.gapY + p.gapH / 2
+      const effGapY = pipeGapY(p, s.distance)
+      const gapTop = effGapY - p.gapH / 2
+      const gapBot = effGapY + p.gapH / 2
 
       // Deterministic per-pipe pseudo-random (so shapes don't flicker)
       const rnd = (n) => {
@@ -624,8 +649,9 @@ export default function FlappyMole() {
       for (const p of s.pipes) {
         const screenX = p.worldX - s.distance
         if (screenX < -PIPE_W || screenX > BOARD_W) continue
-        const gapTop = p.gapY - p.gapH / 2
-        const gapBot = p.gapY + p.gapH / 2
+        const effGapY = pipeGapY(p, s.distance)
+        const gapTop = effGapY - p.gapH / 2
+        const gapBot = effGapY + p.gapH / 2
         ctx.strokeRect(screenX, 0, PIPE_W, gapTop)
         ctx.strokeRect(screenX, gapBot, PIPE_W, BOARD_H - gapBot)
       }
