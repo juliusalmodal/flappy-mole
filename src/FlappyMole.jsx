@@ -9,8 +9,8 @@ const HITBOX_R = 10
 const MOLE_SCREEN_X = 180
 const BOUNCE_FRAMES = 28
 
-const SCROLL_SPEED_START = 2.4
-const SCROLL_SPEED_MAX = 6.5
+const SCROLL_SPEED_START = 1.5
+const SCROLL_SPEED_MAX = 4.2
 
 // Beyond this depth (in meters), obstacles oscillate vertically
 const MOVING_OBSTACLES_THRESHOLD_M = 2500
